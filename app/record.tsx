@@ -76,7 +76,8 @@ const getMonthNumber = (monthName: string): number => {
 
 const HistoryScreen = () => {
   const router = useRouter();
-  const { selectedYear, selectedMonth, selectedCurrency } = useDateContext();
+  const { selectedYear, selectedMonth, selectedFilter, selectedCurrency } =
+    useDateContext(); // Add selectedFilter
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -107,14 +108,59 @@ const HistoryScreen = () => {
     setError(null);
     setTransactions([]);
 
+    // --- Calculate start and end dates based on selectedFilter ---
+    let startDate: Date;
+    let endDate: Date;
+    const now = new Date();
     const monthNumber = getMonthNumber(selectedMonth);
-    if (monthNumber < 0) {
-      setError("Invalid month selected in context.");
-      setLoading(false);
-      return;
+
+    if (selectedFilter === "Daily") {
+      startDate = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+        0,
+        0,
+        0
+      );
+      endDate = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() + 1,
+        0,
+        0,
+        0
+      );
+    } else if (selectedFilter === "Weekly") {
+      const dayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
+      startDate = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() - dayOfWeek, // Start of the current week (Sunday)
+        0,
+        0,
+        0
+      );
+      endDate = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() + (7 - dayOfWeek), // End of the current week (next Sunday)
+        0,
+        0,
+        0
+      );
+    } else {
+      // Monthly (default)
+      if (monthNumber < 0) {
+        setError("Invalid month selected in context.");
+        setLoading(false);
+        return;
+      }
+      startDate = new Date(selectedYear, monthNumber, 1, 0, 0, 0);
+      endDate = new Date(selectedYear, monthNumber + 1, 1, 0, 0, 0);
     }
-    const startDate = new Date(selectedYear, monthNumber, 1, 0, 0, 0);
-    const endDate = new Date(selectedYear, monthNumber + 1, 1, 0, 0, 0);
+    // --- End date calculation ---
+
     const startTimestamp = Timestamp.fromDate(startDate);
     const endTimestamp = Timestamp.fromDate(endDate);
 
@@ -191,7 +237,7 @@ const HistoryScreen = () => {
       );
       unsubscribe();
     };
-  }, [currentUser, selectedYear, selectedMonth]);
+  }, [currentUser, selectedYear, selectedMonth, selectedFilter]); // Add selectedFilter to dependencies
 
   const renderContent = () => {
     if (!currentUser && !loading) {
@@ -207,7 +253,13 @@ const HistoryScreen = () => {
         <View style={styles.centered}>
           <ActivityIndicator size="large" color="#006400" />
           <Text style={styles.infoText}>
-            Loading Records for {selectedMonth} {selectedYear}...
+            Loading Records for{" "}
+            {selectedFilter === "Daily"
+              ? "Today"
+              : selectedFilter === "Weekly"
+              ? "This Week"
+              : `${selectedMonth} ${selectedYear}`}
+            ...
           </Text>
         </View>
       );
@@ -240,7 +292,12 @@ const HistoryScreen = () => {
           <MaterialIcons name="hourglass-empty" size={40} color="#888" />
           <Text style={styles.infoText}>No transactions recorded for</Text>
           <Text style={styles.infoText}>
-            {selectedMonth} {selectedYear}.
+            {selectedFilter === "Daily"
+              ? "Today"
+              : selectedFilter === "Weekly"
+              ? "This Week"
+              : `${selectedMonth} ${selectedYear}`}
+            .
           </Text>
           <Text style={[styles.infoText, { marginTop: 20 }]}>
             Tap '+' to add one!

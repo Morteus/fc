@@ -28,6 +28,7 @@ import { onAuthStateChanged, User, getAuth } from "firebase/auth"; // Import get
 import { app } from "../app/firebase";
 import { useDateContext } from "./context/DateContext";
 import { formatCurrency } from "../utils/formatting";
+import SummaryModal from "../components/SummaryModal"; // Import the new modal
 
 const db = getFirestore(app);
 const auth = getAuth(app);
@@ -118,7 +119,8 @@ const ExpandedTransactionList = ({
 
 function AnalysisScreen() {
   const navigation = useNavigation();
-  const { selectedYear, selectedMonth, selectedCurrency } = useDateContext();
+  const { selectedYear, selectedMonth, selectedFilter, selectedCurrency } =
+    useDateContext(); // Add selectedFilter
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [expenseTransactions, setExpenseTransactions] = useState<Transaction[]>(
@@ -131,6 +133,7 @@ function AnalysisScreen() {
   const [totalMonthlyExpenses, setTotalMonthlyExpenses] = useState<number>(0);
   const [totalWeeklyExpenses, setTotalWeeklyExpenses] = useState<number>(0);
   const [totalDailyExpenses, setTotalDailyExpenses] = useState<number>(0);
+  const [isSummaryModalVisible, setIsSummaryModalVisible] = useState(false); // State for modal
 
   const navigateToTransaction = () => {
     navigation.navigate("transactions" as never);
@@ -157,14 +160,59 @@ function AnalysisScreen() {
     setExpenseTransactions([]);
     setExpandedCategory(null);
 
+    // --- Calculate start and end dates based on selectedFilter ---
+    let startDate: Date;
+    let endDate: Date;
+    const now = new Date();
     const monthNumber = getMonthNumber(selectedMonth);
-    if (monthNumber < 0) {
-      setError("Invalid month selected.");
-      setLoading(false);
-      return;
+
+    if (selectedFilter === "Daily") {
+      startDate = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+        0,
+        0,
+        0
+      );
+      endDate = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() + 1,
+        0,
+        0,
+        0
+      );
+    } else if (selectedFilter === "Weekly") {
+      const dayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
+      startDate = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() - dayOfWeek, // Start of the current week (Sunday)
+        0,
+        0,
+        0
+      );
+      endDate = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() + (7 - dayOfWeek), // End of the current week (next Sunday)
+        0,
+        0,
+        0
+      );
+    } else {
+      // Monthly (default)
+      if (monthNumber < 0) {
+        setError("Invalid month selected.");
+        setLoading(false);
+        return;
+      }
+      startDate = new Date(selectedYear, monthNumber, 1, 0, 0, 0);
+      endDate = new Date(selectedYear, monthNumber + 1, 1, 0, 0, 0);
     }
-    const startDate = new Date(selectedYear, monthNumber, 1, 0, 0, 0);
-    const endDate = new Date(selectedYear, monthNumber + 1, 1, 0, 0, 0);
+    // --- End date calculation ---
+
     const startTimestamp = Timestamp.fromDate(startDate);
     const endTimestamp = Timestamp.fromDate(endDate);
 
@@ -184,6 +232,7 @@ function AnalysisScreen() {
     );
 
     console.log(
+      // Updated log message
       `Analysis: Fetching expenses from ${startDate.toISOString()} to ${endDate.toISOString()}`
     );
 
@@ -241,7 +290,7 @@ function AnalysisScreen() {
     );
 
     return () => unsubscribe();
-  }, [currentUser, selectedYear, selectedMonth]);
+  }, [currentUser, selectedYear, selectedMonth, selectedFilter]); // Add selectedFilter dependency
 
   useEffect(() => {
     if (loading || expenseTransactions.length === 0) {
@@ -251,30 +300,45 @@ function AnalysisScreen() {
       return;
     }
 
-    const totalForPeriod: number = expenseTransactions.reduce(
+    // Calculate total expenses for the specific selected period
+    const totalExpensesForPeriod: number = expenseTransactions.reduce(
       (sum, tx) => sum + tx.amount,
       0
     );
 
-    setTotalMonthlyExpenses(totalForPeriod);
-
-    const monthNumber = getMonthNumber(selectedMonth);
-    if (monthNumber >= 0) {
-      const daysInMonth = new Date(selectedYear, monthNumber + 1, 0).getDate();
-      if (daysInMonth > 0) {
-        const dailyAverage: number = totalForPeriod / daysInMonth;
-        const weeklyAverage: number = dailyAverage * 7;
-        setTotalDailyExpenses(dailyAverage);
-        setTotalWeeklyExpenses(weeklyAverage);
-      } else {
-        setTotalDailyExpenses(0);
-        setTotalWeeklyExpenses(0);
-      }
+    // Update state based on the filter
+    if (selectedFilter === "Daily") {
+      setTotalDailyExpenses(totalExpensesForPeriod);
+      setTotalWeeklyExpenses(0); // Reset others
+      setTotalMonthlyExpenses(0);
+    } else if (selectedFilter === "Weekly") {
+      setTotalDailyExpenses(0);
+      setTotalWeeklyExpenses(totalExpensesForPeriod);
+      setTotalMonthlyExpenses(0);
     } else {
+      // Monthly
       setTotalDailyExpenses(0);
       setTotalWeeklyExpenses(0);
-    }
-  }, [expenseTransactions, loading, selectedYear, selectedMonth]);
+      setTotalMonthlyExpenses(totalExpensesForPeriod);
+
+      // Optional: Calculate averages if needed elsewhere, but not displayed here anymore
+      const monthNumber = getMonthNumber(selectedMonth);
+      if (monthNumber >= 0) {
+        const daysInMonth = new Date(
+          selectedYear,
+          monthNumber + 1,
+          0
+        ).getDate();
+        // const dailyAverage = daysInMonth > 0 ? totalExpensesForPeriod / daysInMonth : 0;
+      }
+    } // Added closing brace for the 'else' block
+  }, [
+    expenseTransactions,
+    loading,
+    selectedYear,
+    selectedMonth,
+    selectedFilter,
+  ]); // Added selectedFilter dependency
 
   const categorySpendingData = useMemo(() => {
     if (loading || expenseTransactions.length === 0) {
@@ -413,33 +477,18 @@ function AnalysisScreen() {
       );
     }
 
+    // Header component now only contains the "View Summary" button
     const headerComponent = (
-      <View style={styles.expenseSection}>
-        <View style={styles.expenseHeader}>
-          <Text style={styles.expenseTitle}>Total Estimated Expenses</Text>
-        </View>
-        <View style={styles.expenseDetails}>
-          <View style={styles.expenseRow}>
-            <Text style={styles.expenseLabel}>
-              Monthly ({selectedMonth} {selectedYear}):
-            </Text>
-            <Text style={styles.expenseValue}>
-              {formatCurrency(totalMonthlyExpenses, selectedCurrency)}
-            </Text>
-          </View>
-          <View style={styles.expenseRow}>
-            <Text style={styles.expenseLabel}>Weekly (Avg):</Text>
-            <Text style={styles.expenseValue}>
-              {formatCurrency(totalWeeklyExpenses, selectedCurrency)}
-            </Text>
-          </View>
-          <View style={styles.expenseRow}>
-            <Text style={styles.expenseLabel}>Daily (Avg):</Text>
-            <Text style={styles.expenseValue}>
-              {formatCurrency(totalDailyExpenses, selectedCurrency)}
-            </Text>
-          </View>
-        </View>
+      <View style={styles.summaryButtonContainer}>
+        <TouchableOpacity
+          style={styles.summaryButton}
+          onPress={() => setIsSummaryModalVisible(true)}
+          disabled={loading || !currentUser}
+        >
+          <Text style={styles.summaryButtonText}>
+            View {selectedFilter} Summary
+          </Text>
+        </TouchableOpacity>
       </View>
     );
 
@@ -464,6 +513,16 @@ function AnalysisScreen() {
         <View style={styles.headerContainer}>
           <HeaderTopNav />
         </View>
+        {/* Summary Modal */}
+        <SummaryModal
+          visible={isSummaryModalVisible}
+          onClose={() => setIsSummaryModalVisible(false)}
+          selectedFilter={selectedFilter}
+          selectedYear={selectedYear}
+          selectedMonth={selectedMonth}
+          selectedCurrency={selectedCurrency}
+          currentUser={currentUser}
+        />
         {/* Content area */}
         <View style={styles.mainContentContainer}>
           {renderContent()}
@@ -498,51 +557,26 @@ const styles = StyleSheet.create({
     // Removed paddingTop
     backgroundColor: "#006400",
   },
-  expenseSection: {
-    backgroundColor: "#fdecea",
-    paddingVertical: 15,
+  summaryButtonContainer: {
+    // Container for the summary button
     paddingHorizontal: 20,
-    marginHorizontal: 15,
     marginTop: 15,
     marginBottom: 20,
+  },
+  summaryButton: {
+    // Style for the summary button
+    backgroundColor: "#DAA520", // Gold color
+    paddingVertical: 12,
+    paddingHorizontal: 20,
     borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#f5c6cb",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  expenseHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f1b0b7",
+    elevation: 3,
   },
-  expenseTitle: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: "#58151c",
-  },
-  expenseDetails: {},
-  expenseRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 5,
-  },
-  expenseLabel: {
-    fontSize: 14,
-    color: "#8c1c1c",
-  },
-  expenseValue: {
+  summaryButtonText: {
+    // Text style for the summary button
+    color: "white",
     fontSize: 16,
-    fontWeight: "600",
-    color: "#dc3545",
+    fontWeight: "bold",
   },
   list: {
     flex: 1,
