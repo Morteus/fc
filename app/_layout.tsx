@@ -1,29 +1,32 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
-
-import { useColorScheme } from '@/hooks/useColorScheme';
+// c:\Users\scubo\OneDrive\Documents\FC_proj\FinClassify\FinClassifyApp\app\_layout.tsx
+import React from "react";
+import { Stack } from "expo-router";
+// Path relative from app/_layout.tsx to app/context/DateContext.tsx
+import { DateProvider } from "./context/DateContext";
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-  });
-
-  if (!loaded) {
-    // Async font loading only occurs in development.
-    return null;
-  }
-
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
+    // DateProvider wraps the entire navigation stack
+    <DateProvider>
+      <Stack
+        screenOptions={{
+          animation: "none", // Disable animations for all screens in this stack
+        }}
+      >
+        {/* All screens within this Stack can now use useDateContext */}
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="record" options={{ headerShown: false }} />
+        {/* Note: 'modal' presentation might still have its own default animation */}
+        <Stack.Screen name="transactions" options={{ presentation: "modal" }} />
+        <Stack.Screen name="Accounts" options={{ headerShown: false }} />
+        <Stack.Screen name="CreateAccounts" />
+        <Stack.Screen name="Budgets" options={{ headerShown: false }} />
+        <Stack.Screen name="forgotpassword" />{" "}
+        <Stack.Screen name="analysis" options={{ headerShown: false }} />
+        <Stack.Screen name="profile" options={{ headerShown: false }} />{" "}
+        {/* <-- Add this line */}
+        {/* Add other screens as needed */}
       </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    </DateProvider>
   );
 }

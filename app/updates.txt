@@ -1,0 +1,20 @@
+4/21/25
+
+Shared context now manages the date.
+Header uses this shared date context.
+Header estimates recurring income monthly.
+It adds manual income to the total.
+Expenses and total are updated too.
+Saving accounts now logs a transaction.
+It creates initial or adjustment records.
+Add button moved below income details.
+Income and expense toggle is back.
+Categories fetch based on selected type.
+Saving updates balance using transactions.
+It correctly adds income or subtracts expense.
+Budgets show default and custom categories.
+It fetches limits from the database.
+Budgeted categories are sorted to the top.
+Labels separate budgeted and unbudgeted items.
+Records now show the account name.
+Automatic balance adjustments are also shown.
