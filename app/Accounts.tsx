@@ -1,4 +1,4 @@
-// c:\Users\scubo\OneDrive\Documents\putangina\fc\app\Accounts.tsx
+// c:\Users\scubo\Downloads\FinClassify-dea0c4be4da0318ed62b8b3aa713817c40b0002f\FinClassifyApp\app\Accounts.tsx
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -11,14 +11,13 @@ import {
   Alert,
   ActivityIndicator,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context"; // <-- Import SafeAreaView
 import Header from "../components/headertopnav";
 import BottomNavigationBar from "../components/botnavigationbar"; // Corrected import name
 import type { NavigationProp } from "@react-navigation/native"; // Import NavigationProp
 import { Ionicons, MaterialIcons } from "@expo/vector-icons"; // Make sure Ionicons is imported
 import { useNavigation } from "expo-router";
 import {
-  // getFirestore, // No longer needed here
+  getFirestore,
   collection,
   onSnapshot,
   deleteDoc,
@@ -26,11 +25,15 @@ import {
   query,
   orderBy,
 } from "firebase/firestore";
-import { onAuthStateChanged, User } from "firebase/auth"; // Keep needed auth imports
-import { db, auth } from "../app/firebase"; // Import initialized db and auth
-import type { RootStackParamList } from "./types/navigation"; // <-- ADJUSTED PATH
+import { getAuth, onAuthStateChanged, User } from "firebase/auth"; // Import Firebase Auth
+import { app } from "../app/firebase"; // Adjust path if needed
+import type { RootStackParamList } from "./types/navigation"; // Adjust path if needed
 import { useDateContext } from "./context/DateContext"; // Import context for currency
 import { formatCurrency } from "../utils/formatting"; // <-- Import shared function
+
+// --- Firestore Initialization ---
+const db = getFirestore(app);
+const auth = getAuth(app); // Initialize Firebase Auth
 
 // --- Image Assets ---
 const CardsSource = require("../assets/CAImages/Cards.png");
@@ -358,9 +361,7 @@ function Accounts() {
   // --- Main Component Return ---
   return (
     <>
-      <SafeAreaView style={styles.container}>
-        {" "}
-        {/* <-- Use SafeAreaView */}
+      <View style={styles.container}>
         <Header />
         <ScrollView
           style={styles.scrollView}
@@ -415,6 +416,7 @@ function Accounts() {
           <Text style={styles.sectionTitle}>Your Accounts</Text>
           {renderAccountList()}
         </ScrollView>
+
         {/* Floating Action Button for Transactions */}
         <TouchableOpacity
           style={styles.fab}
@@ -423,8 +425,7 @@ function Accounts() {
         >
           <MaterialIcons name="add" size={28} color="white" />
         </TouchableOpacity>
-      </SafeAreaView>{" "}
-      {/* <-- Close SafeAreaView */}
+      </View>
       {/* Bottom Navigation Bar */}
       <BottomNavigationBar />
     </>

@@ -1,4 +1,4 @@
-// c:\Users\scubo\OneDrive\Documents\putangina\fc\app\analysis.tsx
+// c:\Users\scubo\Downloads\FinClassify-dea0c4be4da0318ed62b8b3aa713817c40b0002f\FinClassifyApp\app\analysis.tsx
 import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
@@ -8,14 +8,13 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   FlatList, // Using FlatList for better performance
-  SafeAreaView, // <-- Import SafeAreaView
 } from "react-native";
-import HeaderTopNav from "../components/headertopnav"; // Corrected import name
-import BottomNavigationBar from "../components/botnavigationbar";
+import HeaderTopNav from "@/components/headertopnav"; // Corrected import name
+import BottomNavigationBar from "@/components/botnavigationbar";
 import { useNavigation } from "@react-navigation/native";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import {
-  // getFirestore, // No longer needed here
+  getFirestore,
   collection,
   query,
   where,
@@ -23,10 +22,14 @@ import {
   Timestamp,
   onSnapshot,
 } from "firebase/firestore";
-import { onAuthStateChanged, User } from "firebase/auth"; // Keep needed auth imports
-import { db, auth } from "../app/firebase"; // Import initialized db and auth
+import { getAuth, onAuthStateChanged, User } from "firebase/auth"; // Import Firebase Auth
+import { app } from "../app/firebase"; // Adjust path if needed
 import { useDateContext } from "./context/DateContext"; // Import the context hook
 import { formatCurrency } from "../utils/formatting"; // <-- Import shared function
+
+// --- Firestore Initialization ---
+const db = getFirestore(app);
+const auth = getAuth(app); // Initialize Firebase Auth
 
 // --- Interfaces ---
 // Re-using Transaction interface structure (ensure consistency with record.tsx)
@@ -496,15 +499,13 @@ function AnalysisScreen() {
   // --- Main Component Return ---
   return (
     <>
-      <SafeAreaView style={styles.container}>
-        {" "}
-        {/* <-- Use SafeAreaView */}
+      <View style={styles.container}>
         <HeaderTopNav />
         {renderContent()}
         <TouchableOpacity style={styles.fab} onPress={navigateToTransaction}>
           <MaterialIcons name="add" size={28} color="white" />
         </TouchableOpacity>
-      </SafeAreaView>
+      </View>
       <BottomNavigationBar />
     </>
   );

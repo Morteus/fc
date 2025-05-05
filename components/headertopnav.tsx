@@ -170,7 +170,12 @@ const Header = () => {
         setIsLoadingAccounts(false);
       }
     );
-    return () => unsubscribeAccounts();
+    return () => {
+      console.log(
+        `HeaderTopNav: Unsubscribing from accounts listener for ${currentUser?.uid}`
+      );
+      unsubscribeAccounts();
+    };
   }, [currentUser]);
 
   // --- Fetch Totals & Calculate ---
@@ -303,7 +308,12 @@ const Header = () => {
         setIsLoadingTotals(false);
       }
     );
-    return () => unsubscribeTransactions();
+    return () => {
+      console.log(
+        `HeaderTopNav: Unsubscribing from transaction totals listener for ${currentUser?.uid}`
+      );
+      unsubscribeTransactions();
+    };
   }, [
     currentUser,
     selectedYear,
