@@ -1,4 +1,4 @@
-// c:\Users\scubo\Downloads\FinClassify-dea0c4be4da0318ed62b8b3aa713817c40b0002f\FinClassifyApp\app\analysis.tsx
+// c:\Users\scubo\OneDrive\Documents\putangina\fc\app\analysis.tsx
 import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
@@ -7,9 +7,11 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  FlatList, // Using FlatList for better performance
+  FlatList,
+  // Platform removed
 } from "react-native";
-import HeaderTopNav from "@/components/headertopnav"; // Corrected import name
+import { SafeAreaView } from "react-native-safe-area-context"; // Import SafeAreaView
+import HeaderTopNav from "@/components/headertopnav";
 import BottomNavigationBar from "@/components/botnavigationbar";
 import { useNavigation } from "@react-navigation/native";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -22,17 +24,14 @@ import {
   Timestamp,
   onSnapshot,
 } from "firebase/firestore";
-import { getAuth, onAuthStateChanged, User } from "firebase/auth"; // Import Firebase Auth
-import { app } from "../app/firebase"; // Adjust path if needed
-import { useDateContext } from "./context/DateContext"; // Import the context hook
-import { formatCurrency } from "../utils/formatting"; // <-- Import shared function
+import { onAuthStateChanged, User, getAuth } from "firebase/auth"; // Import getAuth
+import { app } from "../app/firebase";
+import { useDateContext } from "./context/DateContext";
+import { formatCurrency } from "../utils/formatting";
 
-// --- Firestore Initialization ---
 const db = getFirestore(app);
-const auth = getAuth(app); // Initialize Firebase Auth
+const auth = getAuth(app);
 
-// --- Interfaces ---
-// Re-using Transaction interface structure (ensure consistency with record.tsx)
 interface Transaction {
   id: string;
   type: "Income" | "Expenses";
@@ -40,12 +39,11 @@ interface Transaction {
   categoryIcon: keyof typeof MaterialCommunityIcons.glyphMap;
   amount: number;
   timestamp: Timestamp;
-  accountId: string | null; // Allow null accountId
+  accountId: string | null;
   accountName?: string;
   description?: string;
 }
 
-// Interface for the processed data to display
 interface CategorySpending {
   categoryName: string;
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
@@ -53,9 +51,6 @@ interface CategorySpending {
   transactionCount: number;
 }
 
-// --- Helper Functions ---
-// formatCurrency moved to utils/formatting.ts
-// Helper to get month number (0-indexed) - same as in record.tsx
 const getMonthNumber = (monthName: string): number => {
   const months = [
     "Jan",
@@ -73,19 +68,16 @@ const getMonthNumber = (monthName: string): number => {
   ];
   return months.indexOf(monthName);
 };
-// --- End Helper Functions ---
 
-// --- Component to Render Transaction Details for an Expanded Category ---
 const ExpandedTransactionList = ({
   categoryName,
   transactions,
-  selectedCurrency, // <-- Add prop for currency
+  selectedCurrency,
 }: {
   categoryName: string;
   transactions: Transaction[];
-  selectedCurrency: string; // <-- Define prop type
+  selectedCurrency: string;
 }) => {
-  // Filter transactions for the specific category
   const categoryTransactions = transactions.filter(
     (t) => t.categoryName === categoryName
   );
@@ -116,64 +108,55 @@ const ExpandedTransactionList = ({
             </Text>
           </View>
           <Text style={styles.expandedAmount}>
-            {formatCurrency(transaction.amount, selectedCurrency)}{" "}
-            {/* Use prop */}
+            {formatCurrency(transaction.amount, selectedCurrency)}
           </Text>
         </View>
       ))}
     </View>
   );
 };
-// --- End ExpandedTransactionList Component ---
 
 function AnalysisScreen() {
-  // Renamed component function to follow convention
   const navigation = useNavigation();
-  const { selectedYear, selectedMonth, selectedCurrency } = useDateContext(); // Get date and currency
+  const { selectedYear, selectedMonth, selectedCurrency } = useDateContext();
 
-  const [currentUser, setCurrentUser] = useState<User | null>(null); // State for the current user
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [expenseTransactions, setExpenseTransactions] = useState<Transaction[]>(
     []
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expandedCategory, setExpandedCategory] = useState<string | null>(null); // State for expanded item
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
 
-  // --- State for Calculated Total Expenses ---
   const [totalMonthlyExpenses, setTotalMonthlyExpenses] = useState<number>(0);
   const [totalWeeklyExpenses, setTotalWeeklyExpenses] = useState<number>(0);
   const [totalDailyExpenses, setTotalDailyExpenses] = useState<number>(0);
 
-  // --- Navigation Handler for FAB ---
   const navigateToTransaction = () => {
     navigation.navigate("transactions" as never);
   };
 
-  // --- Listen for Auth State Changes ---
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user); // Set user to state (null if not logged in)
+      setCurrentUser(user);
       if (!user) {
-        // Handle user not logged in (e.g., navigate to login, show message)
         console.log("Analysis: No user logged in.");
         setLoading(false);
         setError("Please log in to view analysis.");
-        setExpenseTransactions([]); // Clear data if user logs out
+        setExpenseTransactions([]);
       }
     });
-    return () => unsubscribeAuth(); // Cleanup listener
+    return () => unsubscribeAuth();
   }, []);
 
-  // --- Fetch Expense Transactions based on Date Context ---
   useEffect(() => {
-    if (!currentUser) return; // Don't fetch if user is not logged in
+    if (!currentUser) return;
 
     setLoading(true);
     setError(null);
-    setExpenseTransactions([]); // Clear previous data on date change
-    setExpandedCategory(null); // Collapse any expanded item on date change
+    setExpenseTransactions([]);
+    setExpandedCategory(null);
 
-    // Calculate date range
     const monthNumber = getMonthNumber(selectedMonth);
     if (monthNumber < 0) {
       setError("Invalid month selected.");
@@ -188,17 +171,16 @@ function AnalysisScreen() {
     const transactionsCollectionRef = collection(
       db,
       "Accounts",
-      currentUser.uid, // Use the actual user's UID
+      currentUser.uid,
       "transactions"
     );
 
-    // Query for EXPENSE transactions within the date range
     const q = query(
       transactionsCollectionRef,
-      where("type", "==", "Expenses"), // <<< Filter for Expenses only
+      where("type", "==", "Expenses"),
       where("timestamp", ">=", startTimestamp),
       where("timestamp", "<", endTimestamp),
-      orderBy("timestamp", "desc") // Keep ordering if needed, though grouping ignores it
+      orderBy("timestamp", "desc")
     );
 
     console.log(
@@ -211,7 +193,6 @@ function AnalysisScreen() {
         const fetchedExpenses: Transaction[] = [];
         querySnapshot.forEach((doc) => {
           const data = doc.data();
-          // Basic validation
           if (
             data &&
             data.type === "Expenses" &&
@@ -219,7 +200,7 @@ function AnalysisScreen() {
             typeof data.categoryIcon === "string" &&
             typeof data.amount === "number" &&
             data.timestamp instanceof Timestamp &&
-            (typeof data.accountId === "string" || data.accountId === null) // Allow string or null
+            (typeof data.accountId === "string" || data.accountId === null)
           ) {
             fetchedExpenses.push({
               id: doc.id,
@@ -230,7 +211,7 @@ function AnalysisScreen() {
                 "help-circle-outline",
               amount: data.amount,
               timestamp: data.timestamp,
-              accountId: data.accountId, // Will be string or null
+              accountId: data.accountId,
               accountName: data.accountName || "Unknown",
               description: data.description || undefined,
             });
@@ -259,12 +240,10 @@ function AnalysisScreen() {
       }
     );
 
-    return () => unsubscribe(); // Cleanup listener on unmount or date change
-  }, [currentUser, selectedYear, selectedMonth]); // Re-run effect when user or date context changes
+    return () => unsubscribe();
+  }, [currentUser, selectedYear, selectedMonth]);
 
-  // --- Calculate Total Expenses (Monthly, Weekly, Daily Averages) ---
   useEffect(() => {
-    // Reset values if loading or no transactions
     if (loading || expenseTransactions.length === 0) {
       setTotalMonthlyExpenses(0);
       setTotalWeeklyExpenses(0);
@@ -272,39 +251,31 @@ function AnalysisScreen() {
       return;
     }
 
-    // Calculate total for the period
     const totalForPeriod: number = expenseTransactions.reduce(
       (sum, tx) => sum + tx.amount,
       0
     );
 
-    // Assuming the fetched data is for the selected month
     setTotalMonthlyExpenses(totalForPeriod);
 
-    // Estimate weekly/daily based on monthly total (approximate)
     const monthNumber = getMonthNumber(selectedMonth);
-    // Ensure monthNumber is valid before proceeding
     if (monthNumber >= 0) {
       const daysInMonth = new Date(selectedYear, monthNumber + 1, 0).getDate();
-      // Avoid division by zero, although getDate() should return > 0 for valid dates
       if (daysInMonth > 0) {
         const dailyAverage: number = totalForPeriod / daysInMonth;
         const weeklyAverage: number = dailyAverage * 7;
         setTotalDailyExpenses(dailyAverage);
         setTotalWeeklyExpenses(weeklyAverage);
       } else {
-        // Handle unlikely case of daysInMonth being 0 or less
         setTotalDailyExpenses(0);
         setTotalWeeklyExpenses(0);
       }
     } else {
-      // Handle invalid month case
       setTotalDailyExpenses(0);
       setTotalWeeklyExpenses(0);
     }
-  }, [expenseTransactions, loading, selectedYear, selectedMonth]); // Dependencies seem correct
+  }, [expenseTransactions, loading, selectedYear, selectedMonth]);
 
-  // --- Process fetched transactions to calculate spending per category ---
   const categorySpendingData = useMemo(() => {
     if (loading || expenseTransactions.length === 0) {
       return [];
@@ -329,22 +300,18 @@ function AnalysisScreen() {
       }
     });
 
-    // Convert map values to array and sort by total amount descending
     return Array.from(spendingMap.values()).sort(
       (a, b) => b.totalAmount - a.totalAmount
     );
   }, [expenseTransactions, loading]);
 
-  // --- Render Item for FlatList ---
   const renderCategorySpendingItem = ({ item }: { item: CategorySpending }) => {
     const isExpanded = expandedCategory === item.categoryName;
 
     return (
-      // Wrap in a View to contain both the main item and the expanded list
       <View style={styles.itemWrapper}>
         <TouchableOpacity
           style={styles.itemContainer}
-          // If the clicked category is already expanded, collapse it. Otherwise, expand it.
           onPress={() =>
             setExpandedCategory((prevExpanded) =>
               prevExpanded === item.categoryName ? null : item.categoryName
@@ -368,10 +335,8 @@ function AnalysisScreen() {
           </View>
           <View style={styles.amountAndChevron}>
             <Text style={styles.amountText}>
-              {formatCurrency(item.totalAmount, selectedCurrency)}{" "}
-              {/* Pass currency */}
+              {formatCurrency(item.totalAmount, selectedCurrency)}
             </Text>
-            {/* Add a chevron icon to indicate expandability */}
             <MaterialIcons
               name={isExpanded ? "expand-less" : "expand-more"}
               size={24}
@@ -381,21 +346,18 @@ function AnalysisScreen() {
           </View>
         </TouchableOpacity>
 
-        {/* Conditionally render the expanded list */}
         {isExpanded && (
           <ExpandedTransactionList
             categoryName={item.categoryName}
-            transactions={expenseTransactions} // Pass the full list of expenses
-            selectedCurrency={selectedCurrency} // <-- Pass currency down
+            transactions={expenseTransactions}
+            selectedCurrency={selectedCurrency}
           />
         )}
       </View>
     );
   };
 
-  // --- Render Loading / Error / Empty / List ---
   const renderContent = () => {
-    // Show message if user is not logged in (and auth check is done)
     if (!currentUser && !loading) {
       return (
         <View style={styles.centeredStateContainer}>
@@ -451,7 +413,6 @@ function AnalysisScreen() {
       );
     }
 
-    // Define the header component separately for clarity
     const headerComponent = (
       <View style={styles.expenseSection}>
         <View style={styles.expenseHeader}>
@@ -488,46 +449,65 @@ function AnalysisScreen() {
         renderItem={renderCategorySpendingItem}
         keyExtractor={(item) => item.categoryName}
         style={styles.list}
-        contentContainerStyle={styles.listContentContainer} // Keep this for bottom padding
+        contentContainerStyle={styles.listContentContainer}
         ListHeaderComponent={headerComponent}
-        // Add extraData prop to ensure FlatList re-renders when expandedCategory changes
         extraData={expandedCategory}
       />
     );
   };
 
-  // --- Main Component Return ---
   return (
     <>
-      <View style={styles.container}>
-        <HeaderTopNav />
-        {renderContent()}
-        <TouchableOpacity style={styles.fab} onPress={navigateToTransaction}>
-          <MaterialIcons name="add" size={28} color="white" />
-        </TouchableOpacity>
-      </View>
+      {/* Use SafeAreaView for the main screen content area, excluding the bottom nav */}
+      <SafeAreaView style={styles.safeAreaContainer}>
+        {/* Header remains outside SafeAreaView */}
+        <View style={styles.headerContainer}>
+          <HeaderTopNav />
+        </View>
+        {/* Content area */}
+        <View style={styles.mainContentContainer}>
+          {renderContent()}
+          {/* FAB */}
+          {currentUser &&
+            !loading && ( // Render FAB only if user is logged in and not loading
+              <TouchableOpacity
+                style={styles.fab}
+                onPress={navigateToTransaction}
+              >
+                <MaterialIcons name="add" size={28} color="white" />
+              </TouchableOpacity>
+            )}
+        </View>
+      </SafeAreaView>
+      {/* Bottom Nav remains outside SafeAreaView */}
       <BottomNavigationBar />
     </>
   );
 }
 
-// --- Styles ---
 const styles = StyleSheet.create({
-  container: {
+  safeAreaContainer: {
     flex: 1,
-    backgroundColor: "#f4f6f8", // Light background
+    backgroundColor: "#f4f6f8", // Match background
   },
-  // --- Expense Section Styles (Adapted from Accounts.tsx incomeSection) ---
+  mainContentContainer: {
+    flex: 1, // Takes remaining space
+  },
+  // container style removed
+  headerContainer: {
+    // Removed paddingTop
+    backgroundColor: "#006400",
+  },
   expenseSection: {
-    backgroundColor: "#fdecea", // Light red background
+    backgroundColor: "#fdecea",
     paddingVertical: 15,
     paddingHorizontal: 20,
-    marginHorizontal: 15, // Match list padding
+    marginHorizontal: 15,
     marginTop: 15,
-    marginBottom: 20, // Space before the category list
+    marginBottom: 20,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#f5c6cb", // Light red border
+    borderColor: "#f5c6cb",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.08,
@@ -541,14 +521,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "#f1b0b7", // Lighter red border bottom
+    borderBottomColor: "#f1b0b7",
   },
   expenseTitle: {
     fontSize: 17,
     fontWeight: "600",
-    color: "#58151c", // Dark red color
+    color: "#58151c",
   },
-  expenseDetails: {}, // Container for the rows
+  expenseDetails: {},
   expenseRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -557,55 +537,50 @@ const styles = StyleSheet.create({
   },
   expenseLabel: {
     fontSize: 14,
-    color: "#8c1c1c", // Medium red color
+    color: "#8c1c1c",
   },
   expenseValue: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#dc3545", // Standard expense red color
+    color: "#dc3545",
   },
-  // --- List Styles ---
   list: {
     flex: 1,
   },
   listContentContainer: {
     paddingHorizontal: 15,
-    paddingBottom: 90, // Ensure space for FAB and bottom nav
+    paddingBottom: 90,
   },
-  // --- Expandable Item Styles ---
   itemWrapper: {
-    // Wrapper for the main item and potential expanded list
     marginBottom: 12,
-    backgroundColor: "#fff", // Apply background and shadow to wrapper
+    backgroundColor: "#fff",
     borderRadius: 8,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
     elevation: 2,
-    overflow: "hidden", // Important to contain the expanded list visually
+    overflow: "hidden",
   },
   itemContainer: {
-    // Keep original item container styles, but remove margin/shadow
     flexDirection: "row",
     alignItems: "center",
     padding: 15,
-    // Removed marginBottom, backgroundColor, shadow, elevation, borderRadius
   },
   iconContainer: {
     width: 45,
     height: 45,
     borderRadius: 22.5,
-    backgroundColor: "#e0f2e0", // Light green background for icon
+    backgroundColor: "#e0f2e0",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 15,
   },
   icon: {
-    color: "#006400", // Dark green icon color
+    color: "#006400",
   },
   detailsContainer: {
-    flex: 1, // Take remaining space
+    flex: 1,
     marginRight: 10,
   },
   categoryName: {
@@ -615,31 +590,29 @@ const styles = StyleSheet.create({
   },
   transactionCount: {
     fontSize: 13,
-    color: "#6c757d", // Grey color for count
+    color: "#6c757d",
     marginTop: 3,
   },
   amountAndChevron: {
-    // Container for amount and chevron
     flexDirection: "row",
     alignItems: "center",
   },
   amountText: {
-    // Keep original amountText style
     fontSize: 16,
     fontWeight: "bold",
-    color: "#c0392b", // Expense red color
-    marginRight: 5, // Add space before chevron
+    color: "#c0392b",
+    marginRight: 5,
   },
   chevronIcon: {
-    marginLeft: "auto", // Push chevron to the right if needed, or adjust layout
+    marginLeft: "auto",
   },
   expandedListContainer: {
-    paddingHorizontal: 15, // Indent the transaction list slightly
-    paddingBottom: 10, // Space at the bottom of the expanded list
+    paddingHorizontal: 15,
+    paddingBottom: 10,
     paddingTop: 5,
     borderTopWidth: 1,
-    borderTopColor: "#eee", // Separator line
-    backgroundColor: "#fafafa", // Slightly different background for expanded area
+    borderTopColor: "#eee",
+    backgroundColor: "#fafafa",
   },
   expandedTransactionItem: {
     flexDirection: "row",
@@ -650,7 +623,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "#f0f0f0",
   },
   expandedDetails: {
-    flex: 1, // Allow text to take available space
+    flex: 1,
     marginRight: 10,
   },
   expandedDate: {
@@ -665,7 +638,7 @@ const styles = StyleSheet.create({
   expandedAmount: {
     fontSize: 14,
     fontWeight: "500",
-    color: "#c0392b", // Match expense color
+    color: "#c0392b",
   },
   noTransactionsText: {
     paddingVertical: 15,
@@ -676,13 +649,12 @@ const styles = StyleSheet.create({
     borderTopColor: "#eee",
     backgroundColor: "#fafafa",
   },
-  // --- Centered Loading/Error/Empty State ---
   centeredStateContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
-    marginTop: -50, // Adjust to roughly center vertically
+    marginTop: -50,
   },
   centeredStateText: {
     marginTop: 15,
@@ -694,13 +666,12 @@ const styles = StyleSheet.create({
     color: "red",
     fontWeight: "bold",
   },
-  // --- FAB ---
   fab: {
     position: "absolute",
-    bottom: 70, // Adjusted for bottom nav bar
+    bottom: 20, // Adjusted bottom position
     right: 20,
-    backgroundColor: "#0F730C", // Dark green
-    width: 56, // Standard FAB size
+    backgroundColor: "#0F730C",
+    width: 56,
     height: 56,
     borderRadius: 28,
     justifyContent: "center",
@@ -710,7 +681,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowOffset: { width: 0, height: 3 },
     shadowRadius: 4,
+    zIndex: 1,
   },
 });
 
-export default AnalysisScreen; // Export with the conventional name
+export default AnalysisScreen;

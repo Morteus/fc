@@ -16,22 +16,21 @@ import {
   ActivityIndicator,
   ImageSourcePropType,
 } from "react-native";
-import { Stack, useRouter, useLocalSearchParams } from "expo-router"; // Import useLocalSearchParams
+import { SafeAreaView } from "react-native-safe-area-context"; // Import SafeAreaView
+import { Stack, useRouter, useLocalSearchParams } from "expo-router";
 import {
-  getDoc, // Import getDoc
-  // getFirestore, // No longer needed here
+  getDoc,
   collection,
   doc,
   runTransaction,
   serverTimestamp,
-  updateDoc, // Import updateDoc
+  updateDoc,
 } from "firebase/firestore";
-import { onAuthStateChanged, User } from "firebase/auth"; // Keep needed auth imports
-import { db, auth } from "../app/firebase"; // Import initialized db and auth
-import { useDateContext } from "./context/DateContext"; // Import context for currency
-import { CURRENCY_SYMBOLS } from "../utils/formatting"; // Import symbols map
+import { onAuthStateChanged, User } from "firebase/auth";
+import { db, auth } from "../app/firebase";
+import { useDateContext } from "./context/DateContext";
+import { CURRENCY_SYMBOLS } from "../utils/formatting";
 
-// --- Account Icon Data ---
 interface AccountImageOption {
   id: string;
   source: ImageSourcePropType;
@@ -51,51 +50,44 @@ const accountIconOptions: AccountImageOption[] = [
   { id: "5", source: WalletSource, name: "Wallet" },
 ];
 
-// --- Types ---
 type IncomeFrequency = "Daily" | "Weekly" | "Monthly";
 
-// --- Component ---
 const CreateAccountsScreen = () => {
   const router = useRouter();
-  const params = useLocalSearchParams<{ accountId?: string }>(); // Get navigation params
-  const { selectedCurrency } = useDateContext(); // Get currency from context
+  const params = useLocalSearchParams<{ accountId?: string }>();
+  const { selectedCurrency } = useDateContext();
 
-  const [currentUser, setCurrentUser] = useState<User | null>(null); // State for the current user
-  // --- State ---
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [name, setName] = useState("");
-  const [initialBalance, setInitialBalance] = useState(""); // Represents current balance in edit mode
+  const [initialBalance, setInitialBalance] = useState("");
   const [selectedIconOption, setSelectedIconOption] =
     useState<AccountImageOption | null>(null);
   const [incomeAmount, setIncomeAmount] = useState("");
   const [selectedIncomeFrequency, setSelectedIncomeFrequency] =
     useState<IncomeFrequency | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [isLoadingData, setIsLoadingData] = useState(false); // State for loading existing data
-  const isEditMode = !!params.accountId; // Determine if we are editing
+  const [isLoadingData, setIsLoadingData] = useState(false);
+  const isEditMode = !!params.accountId;
 
-  // Validation State
   const [nameError, setNameError] = useState<string | null>(null);
   const [balanceError, setBalanceError] = useState<string | null>(null);
   const [iconError, setIconError] = useState<string | null>(null);
 
-  // --- Listen for Auth State Changes ---
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       if (!user) {
-        // Handle user not logged in (e.g., navigate to login, disable form)
         console.log("CreateAccounts: No user logged in.");
         Alert.alert(
           "Login Required",
           "You must be logged in to manage accounts."
         );
-        router.replace("/"); // Redirect to login
+        router.replace("/");
       }
     });
     return () => unsubscribeAuth();
   }, [router]);
 
-  // --- Fetch Existing Account Data if Editing ---
   useEffect(() => {
     if (isEditMode && currentUser && params.accountId) {
       setIsLoadingData(true);
@@ -106,23 +98,18 @@ const CreateAccountsScreen = () => {
         "accounts",
         params.accountId
       );
-
       getDoc(accountDocRef)
         .then((docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
             setName(data.title || "");
-            // Set the balance field (non-editable in this version)
             setInitialBalance(String(data.balance ?? 0));
             setIncomeAmount(data.incomeAmount ? String(data.incomeAmount) : "");
             setSelectedIncomeFrequency(data.incomeFrequency || null);
-
-            // Find and set the selected icon
             const foundIcon = accountIconOptions.find(
               (opt) => opt.name === data.iconName
             );
             setSelectedIconOption(foundIcon || null);
-
             console.log("Editing account:", data.title);
           } else {
             console.error(
@@ -130,7 +117,7 @@ const CreateAccountsScreen = () => {
               params.accountId
             );
             Alert.alert("Error", "Could not find the account data to edit.");
-            router.back(); // Go back if account not found
+            router.back();
           }
         })
         .catch((error) => {
@@ -138,50 +125,35 @@ const CreateAccountsScreen = () => {
           Alert.alert("Error", "Failed to load account data for editing.");
           router.back();
         })
-        .finally(() => {
-          setIsLoadingData(false);
-        });
+        .finally(() => setIsLoadingData(false));
     } else {
-      // Reset form if creating new or user changes
       setName("");
       setInitialBalance("");
       setSelectedIconOption(null);
       setIncomeAmount("");
       setSelectedIncomeFrequency(null);
     }
-  }, [isEditMode, currentUser, params.accountId, router]); // Add dependencies
+  }, [isEditMode, currentUser, params.accountId, router]);
 
-  // --- Handlers ---
   const handleNameChange = (text: string) => {
     setName(text);
-    if (text.trim()) {
-      setNameError(null); // Clear error if name is not empty
-    }
+    if (text.trim()) setNameError(null);
   };
-
   const handleBalanceChange = (text: string) => {
-    // Allow empty string, numbers, and a single decimal point
     if (text === "" || /^-?\d*\.?\d*$/.test(text)) {
       setInitialBalance(text);
-      setBalanceError(null); // Clear error on valid input
+      setBalanceError(null);
     } else {
       setBalanceError("Invalid number format");
     }
   };
-
   const handleIncomeAmountChange = (text: string) => {
-    // Allow only positive numbers or empty string
     if (text === "" || /^\d*\.?\d*$/.test(text)) {
       setIncomeAmount(text);
-      // If income amount is cleared, also clear frequency
-      if (text === "") {
-        setSelectedIncomeFrequency(null);
-      }
+      if (text === "") setSelectedIncomeFrequency(null);
     }
   };
-
   const handleFrequencySelect = (frequency: IncomeFrequency) => {
-    // Only allow selection if income amount is entered and positive
     if (incomeAmount && parseFloat(incomeAmount) > 0) {
       setSelectedIncomeFrequency(frequency);
     } else {
@@ -191,34 +163,25 @@ const CreateAccountsScreen = () => {
       );
     }
   };
-
   const handleIconSelect = (option: AccountImageOption) => {
     setSelectedIconOption(option);
-    setIconError(null); // Clear error when an icon is selected
+    setIconError(null);
   };
-
   const handleCancel = () => {
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace("/Accounts"); // Fallback if cannot go back
-    }
+    if (router.canGoBack()) router.back();
+    else router.replace("/Accounts");
   };
 
-  // --- Validation Logic ---
   const validateForm = (): boolean => {
     let isValid = true;
     const trimmedName = name.trim();
     const balanceValue = parseFloat(initialBalance);
-
     if (!trimmedName) {
       setNameError("Account name is required.");
       isValid = false;
     } else {
       setNameError(null);
     }
-
-    // Only validate initial balance strictly when *creating*
     if (!isEditMode) {
       if (initialBalance === "" || isNaN(balanceValue)) {
         setBalanceError(
@@ -229,26 +192,21 @@ const CreateAccountsScreen = () => {
         setBalanceError(null);
       }
     } else {
-      // In edit mode, just ensure it's a number if not empty (it's non-editable anyway)
       if (initialBalance !== "" && isNaN(balanceValue)) {
-        setBalanceError("Balance must be a number."); // Should not happen if non-editable
+        setBalanceError("Balance must be a number.");
         isValid = false;
       } else {
         setBalanceError(null);
       }
     }
-
     if (!selectedIconOption) {
       setIconError("Please select an icon for the account.");
       isValid = false;
     } else {
       setIconError(null);
     }
-
-    // Validate income frequency only if income amount is set
     const incomeValue = parseFloat(incomeAmount);
     if (incomeAmount && (isNaN(incomeValue) || incomeValue <= 0)) {
-      // Technically handled by input validation, but good to double-check
       Alert.alert(
         "Invalid Income",
         "If setting income, it must be a positive number."
@@ -261,19 +219,15 @@ const CreateAccountsScreen = () => {
       );
       isValid = false;
     }
-
     return isValid;
   };
 
-  // --- Save Account Logic ---
   const handleSaveAccount = async () => {
-    Keyboard.dismiss(); // Dismiss keyboard before saving
-
+    Keyboard.dismiss();
     if (!currentUser) {
       Alert.alert("Login Required", "You must be logged in to save accounts.");
       return;
     }
-
     if (!validateForm()) {
       Alert.alert(
         "Validation Failed",
@@ -281,26 +235,22 @@ const CreateAccountsScreen = () => {
       );
       return;
     }
-
     setIsSaving(true);
 
     const trimmedName = name.trim();
-    // Use currentBalance for both create and update logic, but it's only set initially for create
     const currentBalance = parseFloat(initialBalance);
-    const incomeNum = incomeAmount ? parseFloat(incomeAmount) : null; // Parse income amount
-
+    const incomeNum = incomeAmount ? parseFloat(incomeAmount) : null;
     const accountDataToSave = {
       title: trimmedName,
-      balance: currentBalance, // Use the balance value (non-editable in edit)
-      iconName: selectedIconOption!.name, // Non-null assertion safe due to validation
-      incomeAmount: incomeNum && incomeNum > 0 ? incomeNum : null, // Store null if 0 or empty
+      balance: currentBalance,
+      iconName: selectedIconOption!.name,
+      incomeAmount: incomeNum && incomeNum > 0 ? incomeNum : null,
       incomeFrequency:
-        incomeNum && incomeNum > 0 ? selectedIncomeFrequency : null, // Store null if no income amount
+        incomeNum && incomeNum > 0 ? selectedIncomeFrequency : null,
     };
 
     try {
       if (isEditMode && params.accountId) {
-        // --- Update Existing Account ---
         const accountDocRef = doc(
           db,
           "Accounts",
@@ -308,65 +258,54 @@ const CreateAccountsScreen = () => {
           "accounts",
           params.accountId
         );
-        // Update only the fields that can change (exclude balance if non-editable)
-        const { balance, ...updateData } = accountDataToSave; // Exclude balance from updateData
-        await updateDoc(accountDocRef, updateData); // Update without balance
+        const { balance, ...updateData } = accountDataToSave;
+        await updateDoc(accountDocRef, updateData);
         Alert.alert(
           "Success",
           `Account "${accountDataToSave.title}" updated successfully.`
         );
-        router.back(); // Go back after editing
+        router.back();
       } else {
-        // --- Create New Account (using Transaction) ---
         await runTransaction(db, async (transaction) => {
           const accountsCollectionRef = collection(
             db,
             "Accounts",
-            currentUser.uid, // Use actual user UID
+            currentUser.uid,
             "accounts"
           );
           const transactionsCollectionRef = collection(
             db,
             "Accounts",
-            currentUser.uid, // Use actual user UID
+            currentUser.uid,
             "transactions"
           );
-
-          // Create a new document reference for the account *within* the transaction
           const accountDocRef = doc(accountsCollectionRef);
-          // Set the account data using the transaction object
           transaction.set(accountDocRef, accountDataToSave);
-
-          // Create initial balance transaction only if balance is not zero
           if (currentBalance !== 0) {
             const balanceChange = currentBalance;
             const transactionType = balanceChange >= 0 ? "Income" : "Expenses";
             const transactionCategory = "Initial Balance";
             const transactionIcon =
               balanceChange >= 0 ? "bank-plus" : "bank-minus";
-
-            // Create a new document reference for the transaction *within* the transaction
             const newTransactionRef = doc(transactionsCollectionRef);
             const transactionData = {
               type: transactionType,
               categoryName: transactionCategory,
               categoryIcon: transactionIcon,
               amount: Math.abs(balanceChange),
-              accountId: accountDocRef.id, // Use the ID generated within the transaction
+              accountId: accountDocRef.id,
               accountName: accountDataToSave.title,
-              description: "Initial account balance", // Add description
+              description: "Initial account balance",
               timestamp: serverTimestamp(),
             };
-            // Set the transaction data using the transaction object
             transaction.set(newTransactionRef, transactionData);
           }
         });
-
         Alert.alert(
           "Success",
           `Account "${accountDataToSave.title}" added successfully.`
         );
-        router.replace("/Accounts"); // Navigate back to Accounts list after creating
+        router.replace("/Accounts");
       }
     } catch (error: any) {
       console.error("Account save/update failed: ", error);
@@ -381,227 +320,214 @@ const CreateAccountsScreen = () => {
     }
   };
 
-  // --- JSX ---
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={styles.keyboardAvoidingContainer}
-    >
-      {/* Stack Screen Configuration */}
-      <Stack.Screen
-        options={{
-          title: isEditMode ? "Edit Account" : "Create New Account", // Dynamic title
-          headerTitleAlign: "center",
-          headerStyle: { backgroundColor: "#006400" }, // Dark green header
-          headerTintColor: "#fff", // White text/icons in header
-          headerTitleStyle: { fontWeight: "bold" },
-        }}
-      />
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <ScrollView
-          style={styles.scrollContainer}
-          contentContainerStyle={{ flexGrow: 1 }} // Ensure content can grow
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* Show loader while fetching existing data */}
-          {isLoadingData && (
-            <View style={styles.loadingOverlay}>
-              <ActivityIndicator size="large" color="#006400" />
-              <Text style={styles.loadingText}>Loading Account Data...</Text>
-            </View>
-          )}
-          <View style={styles.formContainer}>
-            {/* Account Name */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Account Name *</Text>
-              <TextInput
-                style={[styles.input, nameError && { borderColor: "red" }]}
-                placeholder="e.g., Savings, Wallet, BDO"
-                value={name}
-                onChangeText={handleNameChange}
-                placeholderTextColor="#999"
-                maxLength={50} // Limit name length
-                editable={!isLoadingData && !isSaving} // Disable while loading/saving
-              />
-              {nameError && (
-                <Text style={styles.validationHint}>{nameError}</Text>
-              )}
-            </View>
-
-            {/* Initial/Current Balance */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>
-                {isEditMode ? "Current Balance" : "Initial Balance *"}
-              </Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  balanceError && { borderColor: "red" },
-                  isEditMode && styles.inputDisabled, // Style for non-editable
-                ]}
-                placeholder="0.00"
-                keyboardType="numeric"
-                value={initialBalance}
-                onChangeText={handleBalanceChange}
-                placeholderTextColor="#999"
-                editable={!isEditMode && !isLoadingData && !isSaving} // Make balance non-editable in edit mode
-              />
-              {balanceError && (
-                <Text style={styles.validationHint}>{balanceError}</Text>
-              )}
-            </View>
-
-            {/* Icon Selection */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Select Icon *</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.iconScrollView}
-              >
-                {accountIconOptions.map((option) => (
-                  <TouchableOpacity
-                    key={option.id}
-                    style={[
-                      styles.iconTouchable,
-                      selectedIconOption?.id === option.id &&
-                        styles.iconSelected,
-                    ]}
-                    onPress={() => handleIconSelect(option)}
-                    disabled={isLoadingData || isSaving} // Disable while loading/saving
-                  >
-                    <Image
-                      source={option.source}
-                      style={styles.iconImage}
-                      resizeMode="contain"
-                    />
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-              {iconError && (
-                <Text style={styles.validationHint}>{iconError}</Text>
-              )}
-            </View>
-
-            {/* Optional Recurring Income Section */}
-            <View style={styles.incomeSection}>
-              <Text style={styles.sectionTitle}>
-                Optional: Recurring Income
-              </Text>
+    // Use SafeAreaView as the top-level container
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.keyboardAvoidingContainer}
+      >
+        <Stack.Screen
+          options={{
+            title: isEditMode ? "Edit Account" : "Create New Account",
+            headerTitleAlign: "center",
+            headerStyle: { backgroundColor: "#006400" },
+            headerTintColor: "#fff",
+            headerTitleStyle: { fontWeight: "bold" },
+          }}
+        />
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <ScrollView
+            style={styles.scrollContainer}
+            contentContainerStyle={{ flexGrow: 1 }}
+            keyboardShouldPersistTaps="handled"
+          >
+            {isLoadingData && (
+              <View style={styles.loadingOverlay}>
+                <ActivityIndicator size="large" color="#006400" />
+                <Text style={styles.loadingText}>Loading Account Data...</Text>
+              </View>
+            )}
+            <View style={styles.formContainer}>
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>
-                  {/* Dynamically display currency symbol */}
-                  Estimated Income Amount (
-                  {CURRENCY_SYMBOLS[selectedCurrency] || selectedCurrency})
-                </Text>
+                <Text style={styles.inputLabel}>Account Name *</Text>
                 <TextInput
-                  style={styles.input}
-                  placeholder="e.g., 5000"
-                  keyboardType="numeric"
-                  value={incomeAmount}
-                  onChangeText={handleIncomeAmountChange}
+                  style={[styles.input, nameError && { borderColor: "red" }]}
+                  placeholder="e.g., Savings, Wallet, BDO"
+                  value={name}
+                  onChangeText={handleNameChange}
                   placeholderTextColor="#999"
-                  editable={!isLoadingData && !isSaving} // Disable while loading/saving
+                  maxLength={50}
+                  editable={!isLoadingData && !isSaving}
                 />
+                {nameError && (
+                  <Text style={styles.validationHint}>{nameError}</Text>
+                )}
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Income Frequency</Text>
-                <View style={styles.frequencySelector}>
-                  {(["Daily", "Weekly", "Monthly"] as IncomeFrequency[]).map(
-                    (freq) => (
-                      <TouchableOpacity
-                        key={freq}
-                        style={[
-                          styles.frequencyButton,
-                          selectedIncomeFrequency === freq &&
-                            styles.frequencyButtonSelected,
-                          // Disable if no income amount is entered or if it's zero/invalid
-                          (!incomeAmount ||
-                            parseFloat(incomeAmount) <= 0 ||
-                            isLoadingData ||
-                            isSaving) &&
-                            styles.frequencyButtonDisabled,
-                        ]}
-                        onPress={() => handleFrequencySelect(freq)}
-                        disabled={
-                          !incomeAmount ||
-                          parseFloat(incomeAmount) <= 0 ||
-                          isLoadingData ||
-                          isSaving
-                        }
-                      >
-                        <Text
+                <Text style={styles.inputLabel}>
+                  {isEditMode ? "Current Balance" : "Initial Balance *"}
+                </Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    balanceError && { borderColor: "red" },
+                    isEditMode && styles.inputDisabled,
+                  ]}
+                  placeholder="0.00"
+                  keyboardType="numeric"
+                  value={initialBalance}
+                  onChangeText={handleBalanceChange}
+                  placeholderTextColor="#999"
+                  editable={!isEditMode && !isLoadingData && !isSaving}
+                />
+                {balanceError && (
+                  <Text style={styles.validationHint}>{balanceError}</Text>
+                )}
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Select Icon *</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.iconScrollView}
+                >
+                  {accountIconOptions.map((option) => (
+                    <TouchableOpacity
+                      key={option.id}
+                      style={[
+                        styles.iconTouchable,
+                        selectedIconOption?.id === option.id &&
+                          styles.iconSelected,
+                      ]}
+                      onPress={() => handleIconSelect(option)}
+                      disabled={isLoadingData || isSaving}
+                    >
+                      <Image
+                        source={option.source}
+                        style={styles.iconImage}
+                        resizeMode="contain"
+                      />
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+                {iconError && (
+                  <Text style={styles.validationHint}>{iconError}</Text>
+                )}
+              </View>
+
+              <View style={styles.incomeSection}>
+                <Text style={styles.sectionTitle}>
+                  Optional: Recurring Income
+                </Text>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>
+                    Estimated Income Amount (
+                    {CURRENCY_SYMBOLS[selectedCurrency] || selectedCurrency})
+                  </Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., 5000"
+                    keyboardType="numeric"
+                    value={incomeAmount}
+                    onChangeText={handleIncomeAmountChange}
+                    placeholderTextColor="#999"
+                    editable={!isLoadingData && !isSaving}
+                  />
+                </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Income Frequency</Text>
+                  <View style={styles.frequencySelector}>
+                    {(["Daily", "Weekly", "Monthly"] as IncomeFrequency[]).map(
+                      (freq) => (
+                        <TouchableOpacity
+                          key={freq}
                           style={[
-                            styles.frequencyButtonText,
+                            styles.frequencyButton,
                             selectedIncomeFrequency === freq &&
-                              styles.frequencyButtonTextSelected,
+                              styles.frequencyButtonSelected,
                             (!incomeAmount ||
                               parseFloat(incomeAmount) <= 0 ||
                               isLoadingData ||
                               isSaving) &&
-                              styles.frequencyButtonDisabledText,
+                              styles.frequencyButtonDisabled,
                           ]}
+                          onPress={() => handleFrequencySelect(freq)}
+                          disabled={
+                            !incomeAmount ||
+                            parseFloat(incomeAmount) <= 0 ||
+                            isLoadingData ||
+                            isSaving
+                          }
                         >
-                          {freq}
-                        </Text>
-                      </TouchableOpacity>
-                    )
-                  )}
+                          <Text
+                            style={[
+                              styles.frequencyButtonText,
+                              selectedIncomeFrequency === freq &&
+                                styles.frequencyButtonTextSelected,
+                              (!incomeAmount ||
+                                parseFloat(incomeAmount) <= 0 ||
+                                isLoadingData ||
+                                isSaving) &&
+                                styles.frequencyButtonDisabledText,
+                            ]}
+                          >
+                            {freq}
+                          </Text>
+                        </TouchableOpacity>
+                      )
+                    )}
+                  </View>
                 </View>
               </View>
-            </View>
 
-            {/* Action Buttons */}
-            <View style={styles.actionButtonsContainer}>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.cancelButton]}
-                onPress={handleCancel}
-                disabled={isSaving || isLoadingData} // Disable cancel while saving/loading
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.actionButton,
-                  styles.saveButton,
-                  (isSaving || isLoadingData || !currentUser) &&
-                    styles.actionButtonDisabled, // Style when disabled/loading/no user
-                ]}
-                onPress={handleSaveAccount}
-                disabled={isSaving || isLoadingData || !currentUser} // Prevent multiple clicks or if loading/no user
-              >
-                {isSaving ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.saveButtonText}>
-                    {isEditMode ? "Update Account" : "Save Account"}
-                  </Text>
-                )}
-              </TouchableOpacity>
+              <View style={styles.actionButtonsContainer}>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.cancelButton]}
+                  onPress={handleCancel}
+                  disabled={isSaving || isLoadingData}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.actionButton,
+                    styles.saveButton,
+                    (isSaving || isLoadingData || !currentUser) &&
+                      styles.actionButtonDisabled,
+                  ]}
+                  onPress={handleSaveAccount}
+                  disabled={isSaving || isLoadingData || !currentUser}
+                >
+                  {isSaving ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.saveButtonText}>
+                      {isEditMode ? "Update Account" : "Save Account"}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        </ScrollView>
-      </TouchableWithoutFeedback>
-    </KeyboardAvoidingView>
+          </ScrollView>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
-// --- Styles ---
 const styles = StyleSheet.create({
-  keyboardAvoidingContainer: {
-    flex: 1,
-    backgroundColor: "#f4f6f8", // Light grey background
-  },
-  scrollContainer: {
-    flex: 1, // Take available space
-  },
+  safeArea: { flex: 1, backgroundColor: "#f4f6f8" }, // Apply background to SafeAreaView
+  keyboardAvoidingContainer: { flex: 1 }, // Removed background color
+  scrollContainer: { flex: 1 },
   loadingOverlay: {
-    ...StyleSheet.absoluteFillObject, // Cover the screen
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(255, 255, 255, 0.8)",
     justifyContent: "center",
     alignItems: "center",
-    zIndex: 10, // Ensure it's on top
+    zIndex: 10,
   },
   loadingText: {
     marginTop: 10,
@@ -609,76 +535,51 @@ const styles = StyleSheet.create({
     color: "#333",
     fontWeight: "500",
   },
-  formContainer: {
-    padding: 25,
-    flexGrow: 1, // Allow container to grow within ScrollView
-    paddingBottom: 40, // Ensure space for buttons at the bottom
-  },
-  inputGroup: {
-    width: "100%",
-    marginBottom: 20,
-  },
+  formContainer: { padding: 25, flexGrow: 1, paddingBottom: 40 },
+  inputGroup: { width: "100%", marginBottom: 20 },
   inputLabel: {
     fontSize: 15,
     fontWeight: "600",
-    color: "#555", // Dark grey label
+    color: "#555",
     marginBottom: 8,
   },
   input: {
     height: 50,
     width: "100%",
     borderWidth: 1,
-    borderColor: "#bdc3c7", // Medium grey border
+    borderColor: "#bdc3c7",
     borderRadius: 8,
     paddingHorizontal: 15,
     fontSize: 16,
-    backgroundColor: "#fdfdfd", // Slightly off-white input background
-    color: "#333", // Dark text color
+    backgroundColor: "#fdfdfd",
+    color: "#333",
   },
-  inputDisabled: {
-    // Style for non-editable inputs
-    backgroundColor: "#e9ecef", // Light grey background
-    color: "#6c757d", // Muted text color
-  },
-  iconScrollView: {
-    paddingTop: 5,
-    paddingBottom: 10,
-  },
+  inputDisabled: { backgroundColor: "#e9ecef", color: "#6c757d" },
+  iconScrollView: { paddingTop: 5, paddingBottom: 10 },
   iconTouchable: {
     marginRight: 12,
     padding: 6,
     borderWidth: 2,
-    borderColor: "transparent", // Default no border
+    borderColor: "transparent",
     borderRadius: 10,
-    backgroundColor: "#f0f0f0", // Light background for icons
+    backgroundColor: "#f0f0f0",
     alignItems: "center",
     justifyContent: "center",
   },
-  iconSelected: {
-    borderColor: "#006400", // Dark green border when selected
-    backgroundColor: "#e8f5e9", // Light green background when selected
-  },
-  iconImage: {
-    width: 55,
-    height: 55,
-  },
-  validationHint: {
-    fontSize: 12,
-    color: "red",
-    marginTop: 5,
-    marginLeft: 5,
-  },
+  iconSelected: { borderColor: "#006400", backgroundColor: "#e8f5e9" },
+  iconImage: { width: 55, height: 55 },
+  validationHint: { fontSize: 12, color: "red", marginTop: 5, marginLeft: 5 },
   incomeSection: {
     width: "100%",
     marginTop: 15,
     paddingTop: 20,
     borderTopWidth: 1,
-    borderTopColor: "#ecf0f1", // Light separator line
+    borderTopColor: "#ecf0f1",
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#7f8c8d", // Muted grey for optional section title
+    color: "#7f8c8d",
     marginBottom: 20,
     textAlign: "center",
   },
@@ -694,71 +595,52 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: "#bdc3c7", // Match input border
-    borderRadius: 25, // Pill shape
-    backgroundColor: "#fdfdfd", // Match input background
+    borderColor: "#bdc3c7",
+    borderRadius: 25,
+    backgroundColor: "#fdfdfd",
     alignItems: "center",
   },
   frequencyButtonSelected: {
-    backgroundColor: "#006400", // Dark green background when selected
-    borderColor: "#004d00", // Slightly darker border for selected
+    backgroundColor: "#006400",
+    borderColor: "#004d00",
   },
   frequencyButtonDisabled: {
-    backgroundColor: "#f0f0f0", // Lighter background when disabled
-    borderColor: "#dcdcdc", // Lighter border when disabled
-    opacity: 0.7, // Fade disabled button
+    backgroundColor: "#f0f0f0",
+    borderColor: "#dcdcdc",
+    opacity: 0.7,
   },
   frequencyButtonText: {
     fontSize: 13,
-    color: "#555", // Match label color
+    color: "#555",
     fontWeight: "500",
     textAlign: "center",
   },
-  frequencyButtonTextSelected: {
-    color: "#fff", // White text on selected button
-    fontWeight: "bold",
-  },
-  frequencyButtonDisabledText: {
-    color: "#aaa", // Greyed out text when disabled
-  },
+  frequencyButtonTextSelected: { color: "#fff", fontWeight: "bold" },
+  frequencyButtonDisabledText: { color: "#aaa" },
   actionButtonsContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
     width: "100%",
-    marginTop: 30, // Space above buttons
-    paddingHorizontal: 5, // Slight horizontal padding if needed
+    marginTop: 30,
+    paddingHorizontal: 5,
   },
   actionButton: {
-    flex: 1, // Equal width buttons
+    flex: 1,
     paddingVertical: 14,
     borderRadius: 8,
     alignItems: "center",
-    marginHorizontal: 6, // Space between buttons
+    marginHorizontal: 6,
     borderWidth: 1,
-    minHeight: 48, // Ensure consistent height, especially with loader
-    justifyContent: "center", // Center content (text or loader)
+    minHeight: 48,
+    justifyContent: "center",
   },
-  cancelButton: {
-    borderColor: "#ccc", // Light grey border for cancel
-    backgroundColor: "#f8f9fa", // Very light grey background for cancel
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#555", // Dark grey text for cancel
-  },
-  saveButton: {
-    backgroundColor: "#DAA520", // Gold color for save
-    borderColor: "#DAA520", // Match background color for border
-  },
-  saveButtonText: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#fff", // White text for save
-  },
+  cancelButton: { borderColor: "#ccc", backgroundColor: "#f8f9fa" },
+  cancelButtonText: { fontSize: 16, fontWeight: "bold", color: "#555" },
+  saveButton: { backgroundColor: "#DAA520", borderColor: "#DAA520" },
+  saveButtonText: { fontSize: 16, fontWeight: "bold", color: "#fff" },
   actionButtonDisabled: {
-    opacity: 0.6, // General disabled style
-    backgroundColor: "#e9d8a1", // Lighter gold when save is disabled
+    opacity: 0.6,
+    backgroundColor: "#e9d8a1",
     borderColor: "#e9d8a1",
   },
 });

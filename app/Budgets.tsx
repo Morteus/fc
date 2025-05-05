@@ -1,17 +1,19 @@
-// c:\Users\scubo\OneDrive\Documents\FC_proj\FinClassify\FinClassifyApp\app\Budgets.tsx
+// c:\Users\scubo\OneDrive\Documents\putangina\fc\app\Budgets.tsx
 import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
-  FlatList, // Keep using FlatList
+  FlatList,
   Alert,
   ActivityIndicator,
   Modal,
   TextInput,
   ScrollView,
+  // Platform removed
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context"; // Import SafeAreaView
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import {
@@ -25,22 +27,16 @@ import {
   deleteDoc,
   doc,
   orderBy,
-  Timestamp, // Import Timestamp
+  Timestamp,
 } from "firebase/firestore";
-import { getAuth, onAuthStateChanged, User } from "firebase/auth"; // Import Firebase Auth
+import { onAuthStateChanged, User } from "firebase/auth";
 
-// Import components and config
 import HeaderTopNav from "../components/headertopnav";
-import BotNavigationBar from "../components/botnavigationbar"; // Corrected import name
-import { app } from "../app/firebase"; // Adjust path if needed
-import { useDateContext } from "./context/DateContext"; // Import the context hook
-import { formatCurrency } from "../utils/formatting"; // Import shared function
+import BotNavigationBar from "../components/botnavigationbar";
+import { app, db, auth } from "../app/firebase";
+import { useDateContext } from "./context/DateContext";
+import { formatCurrency, CURRENCY_SYMBOLS } from "../utils/formatting"; // Import CURRENCY_SYMBOLS
 
-// --- Firestore Initialization ---
-const db = getFirestore(app);
-const auth = getAuth(app); // Initialize Firebase Auth
-
-// --- Hardcoded Predefined Expense Categories (Base List) ---
 const PREDEFINED_EXPENSE_CATEGORIES: Array<{
   name: string;
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
@@ -57,10 +53,8 @@ const PREDEFINED_EXPENSE_CATEGORIES: Array<{
   { name: "Shopping", icon: "cart" },
   { name: "Sports", icon: "basketball" },
   { name: "Travel", icon: "train" },
-  // Add other desired default categories here
 ];
 
-// --- Interfaces ---
 interface BudgetDefinition {
   id: string;
   categoryName: string;
@@ -68,7 +62,6 @@ interface BudgetDefinition {
   icon?: keyof typeof MaterialCommunityIcons.glyphMap;
 }
 
-// Re-using Transaction interface structure (ensure consistency)
 interface Transaction {
   id: string;
   type: "Income" | "Expenses";
@@ -93,12 +86,9 @@ interface BudgetDisplayData {
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
   limit: number;
   budgetId: string | null;
-  currentSpending: number; // Add current spending
+  currentSpending: number;
 }
 
-// --- Helper Functions ---
-// formatCurrency moved to utils/formatting.ts
-// Helper to get month number (0-indexed)
 const getMonthNumber = (monthName: string): number => {
   const months = [
     "Jan",
@@ -116,23 +106,19 @@ const getMonthNumber = (monthName: string): number => {
   ];
   return months.indexOf(monthName);
 };
-// --- End Helper Functions ---
 
 const BudgetsScreen = () => {
   const navigation = useNavigation();
-  // Get date and filter from context
   const { selectedYear, selectedMonth, selectedFilter, selectedCurrency } =
-    useDateContext(); // <-- Get selectedCurrency
+    useDateContext();
 
-  const [currentUser, setCurrentUser] = useState<User | null>(null); // State for the current user
-  // State for budget limits fetched from 'budgets' collection
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [budgetDefinitions, setBudgetDefinitions] = useState<
     BudgetDefinition[]
   >([]);
   const [isLoadingBudgets, setIsLoadingBudgets] = useState(true);
   const [errorBudgets, setErrorBudgets] = useState<string | null>(null);
 
-  // State for user-defined categories fetched from 'Expenses' collection
   const [userExpenseCategories, setUserExpenseCategories] = useState<
     UserCategory[]
   >([]);
@@ -141,16 +127,14 @@ const BudgetsScreen = () => {
     null
   );
 
-  // State for the Add/Edit Budget Modal
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingBudgetId, setEditingBudgetId] = useState<string | null>(null);
   const [selectedCategoryName, setSelectedCategoryName] = useState<
     string | null
   >(null);
-  const [budgetLimit, setBudgetLimit] = useState<string>(""); // Input is string
+  const [budgetLimit, setBudgetLimit] = useState<string>("");
 
-  // State for fetched expense transactions
   const [expenseTransactions, setExpenseTransactions] = useState<Transaction[]>(
     []
   );
@@ -159,17 +143,14 @@ const BudgetsScreen = () => {
     null
   );
 
-  // State to track already notified exceeded budgets for the current period
   const [notifiedExceededCategories, setNotifiedExceededCategories] = useState<
     Set<string>
   >(new Set());
 
-  // --- Navigation Handler for FAB ---
   const navigateToTransaction = () => {
-    navigation.navigate("transactions" as never); // Navigate to the transaction screen
+    navigation.navigate("transactions" as never);
   };
 
-  // --- Listen for Auth State Changes ---
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
@@ -177,20 +158,19 @@ const BudgetsScreen = () => {
         console.log("Budgets: No user logged in.");
         setIsLoadingBudgets(false);
         setIsLoadingUserCategories(false);
-        setIsLoadingTransactions(false); // Stop transaction loading
+        setIsLoadingTransactions(false);
         setErrorBudgets("Please log in to view budgets.");
-        setBudgetDefinitions([]); // Clear data on logout
+        setBudgetDefinitions([]);
         setUserExpenseCategories([]);
-        setExpenseTransactions([]); // Clear transactions
-        setNotifiedExceededCategories(new Set()); // Reset notifications
+        setExpenseTransactions([]);
+        setNotifiedExceededCategories(new Set());
       }
     });
     return () => unsubscribeAuth();
   }, []);
 
-  // --- Fetch User-Defined Expense Categories ('Expenses' collection) ---
   useEffect(() => {
-    if (!currentUser) return; // Don't fetch if no user
+    if (!currentUser) return;
     setIsLoadingUserCategories(true);
     setErrorUserCategories(null);
     const userCategoriesColRef = collection(
@@ -198,7 +178,7 @@ const BudgetsScreen = () => {
       "Accounts",
       currentUser.uid,
       "Expenses"
-    ); // Use actual UID
+    );
     const qUser = query(userCategoriesColRef, orderBy("name"));
 
     const unsubscribeUserCats = onSnapshot(
@@ -209,7 +189,7 @@ const BudgetsScreen = () => {
             ({
               id: doc.id,
               name: doc.data().name,
-              icon: doc.data().icon || "help-circle-outline", // Ensure icon exists
+              icon: doc.data().icon || "help-circle-outline",
               description: doc.data().description,
             } as UserCategory)
         );
@@ -226,14 +206,11 @@ const BudgetsScreen = () => {
         setIsLoadingUserCategories(false);
       }
     );
-
     return () => unsubscribeUserCats();
-  }, [currentUser]); // Re-run if user changes
+  }, [currentUser]);
 
-  // --- Fetch Budget Definitions (Limits from 'budgets' collection) ---
   useEffect(() => {
     if (!currentUser || isLoadingUserCategories) {
-      // Also check for user
       setIsLoadingBudgets(true);
       return;
     }
@@ -243,19 +220,16 @@ const BudgetsScreen = () => {
     const predefinedNames = PREDEFINED_EXPENSE_CATEGORIES.map((c) => c.name);
     const userNames = userExpenseCategories.map((c) => c.name);
     const allCategoryNames = [...new Set([...predefinedNames, ...userNames])];
-
     const budgetsColRef = collection(
       db,
       "Accounts",
       currentUser.uid,
       "budgets"
-    ); // Use actual UID
-
-    // Firestore 'in' query limit is 30 as of latest check
+    );
     const categoryFilter =
       allCategoryNames.length > 0
         ? allCategoryNames.slice(0, 30)
-        : ["__EMPTY_PLACEHOLDER__"]; // Use placeholder if no categories
+        : ["__EMPTY_PLACEHOLDER__"];
 
     if (allCategoryNames.length > 30) {
       console.warn(
@@ -291,20 +265,17 @@ const BudgetsScreen = () => {
         setIsLoadingBudgets(false);
       }
     );
-
     return () => unsubscribeBudgets();
-  }, [currentUser, userExpenseCategories, isLoadingUserCategories]); // Add currentUser dependency
+  }, [currentUser, userExpenseCategories, isLoadingUserCategories]);
 
-  // --- Fetch Expense Transactions based on Date Context and Filter ---
   useEffect(() => {
-    if (!currentUser) return; // Don't fetch if user is not logged in
+    if (!currentUser) return;
 
     setIsLoadingTransactions(true);
     setErrorTransactions(null);
-    setExpenseTransactions([]); // Clear previous data
-    setNotifiedExceededCategories(new Set()); // Reset notifications on period change
+    setExpenseTransactions([]);
+    setNotifiedExceededCategories(new Set());
 
-    // --- Calculate Date Range based on Filter ---
     let startDate: Date;
     let endDate: Date;
     const now = new Date();
@@ -328,7 +299,7 @@ const BudgetsScreen = () => {
         0
       );
     } else if (selectedFilter === "Weekly") {
-      const dayOfWeek = now.getDay(); // 0 (Sun) - 6 (Sat)
+      const dayOfWeek = now.getDay();
       startDate = new Date(
         now.getFullYear(),
         now.getMonth(),
@@ -346,7 +317,6 @@ const BudgetsScreen = () => {
         0
       );
     } else {
-      // Monthly (default)
       if (monthNumber < 0) {
         setErrorTransactions("Invalid month selected.");
         setIsLoadingTransactions(false);
@@ -357,7 +327,6 @@ const BudgetsScreen = () => {
     }
     const startTimestamp = Timestamp.fromDate(startDate);
     const endTimestamp = Timestamp.fromDate(endDate);
-    // --- End Date Range Calculation ---
 
     const transactionsColRef = collection(
       db,
@@ -365,14 +334,11 @@ const BudgetsScreen = () => {
       currentUser.uid,
       "transactions"
     );
-
-    // Query for EXPENSE transactions within the date range
     const q = query(
       transactionsColRef,
       where("type", "==", "Expenses"),
       where("timestamp", ">=", startTimestamp),
       where("timestamp", "<", endTimestamp)
-      // No specific order needed for summing
     );
 
     console.log(
@@ -402,26 +368,20 @@ const BudgetsScreen = () => {
         setIsLoadingTransactions(false);
       }
     );
+    return () => unsubscribe();
+  }, [currentUser, selectedYear, selectedMonth, selectedFilter]);
 
-    return () => unsubscribe(); // Cleanup listener
-  }, [currentUser, selectedYear, selectedMonth, selectedFilter]); // Re-run when filter changes too
-
-  // --- Calculate Display Items using useMemo ---
   const displayItems = useMemo(() => {
-    // Wait for all data to load
-    if (isLoadingBudgets || isLoadingUserCategories || isLoadingTransactions) {
+    if (isLoadingBudgets || isLoadingUserCategories || isLoadingTransactions)
       return [];
-    }
 
     const combinedCategoriesMap = new Map<
       string,
       { name: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }
     >();
-
-    PREDEFINED_EXPENSE_CATEGORIES.forEach((cat) => {
-      combinedCategoriesMap.set(cat.name, cat);
-    });
-
+    PREDEFINED_EXPENSE_CATEGORIES.forEach((cat) =>
+      combinedCategoriesMap.set(cat.name, cat)
+    );
     userExpenseCategories.forEach((userCat) => {
       if (!combinedCategoriesMap.has(userCat.name)) {
         combinedCategoriesMap.set(userCat.name, {
@@ -430,10 +390,8 @@ const BudgetsScreen = () => {
         });
       }
     });
-
     const allCategories = Array.from(combinedCategoriesMap.values());
 
-    // Calculate current spending per category for the period
     const spendingMap = new Map<string, number>();
     expenseTransactions.forEach((tx) => {
       if (tx.type === "Expenses") {
@@ -442,7 +400,6 @@ const BudgetsScreen = () => {
       }
     });
 
-    // Combine category info, budget limit, and current spending
     return allCategories
       .map((category) => {
         const budgetDef = budgetDefinitions.find(
@@ -450,17 +407,16 @@ const BudgetsScreen = () => {
         );
         const limit = budgetDef?.limit ?? 0;
         const budgetId = budgetDef?.id ?? null;
-        const currentSpending = spendingMap.get(category.name) ?? 0; // Get spending
+        const currentSpending = spendingMap.get(category.name) ?? 0;
         return {
           categoryName: category.name,
           icon: category.icon,
           limit: limit,
-          currentSpending: currentSpending, // Add spending to display data
+          currentSpending: currentSpending,
           budgetId: budgetId,
         };
       })
       .sort((a, b) => {
-        // Sort budgeted items first, then alphabetically
         const aHasBudget = a.limit > 0 && a.budgetId !== null;
         const bHasBudget = b.limit > 0 && b.budgetId !== null;
         if (aHasBudget && !bHasBudget) return -1;
@@ -471,35 +427,31 @@ const BudgetsScreen = () => {
     budgetDefinitions,
     isLoadingBudgets,
     userExpenseCategories,
-    expenseTransactions, // Depend on transactions
+    expenseTransactions,
     isLoadingUserCategories,
-    isLoadingTransactions, // Depend on transaction loading state
+    isLoadingTransactions,
   ]);
 
-  // --- Find the index of the first item without a budget ---
-  // This is used to know where to place the "Not Budgeted" header
   const firstUnbudgetedIndex = useMemo(() => {
     return displayItems.findIndex(
       (item) => !(item.limit > 0 && item.budgetId !== null)
     );
   }, [displayItems]);
 
-  // --- Effect to Check for Exceeded Budgets and Alert ---
   useEffect(() => {
     if (
       isLoadingBudgets ||
       isLoadingUserCategories ||
       isLoadingTransactions ||
       displayItems.length === 0
-    ) {
-      return; // Don't check if loading or no items
-    }
+    )
+      return;
 
     const newlyExceeded = displayItems.filter(
       (item) =>
-        item.limit > 0 && // Must have a limit set
-        item.currentSpending > item.limit && // Spending exceeds limit
-        !notifiedExceededCategories.has(item.categoryName) // Not already notified in this period
+        item.limit > 0 &&
+        item.currentSpending > item.limit &&
+        !notifiedExceededCategories.has(item.categoryName)
     );
 
     if (newlyExceeded.length > 0) {
@@ -510,7 +462,6 @@ const BudgetsScreen = () => {
         "Budget Exceeded!",
         `You've exceeded your budget for: ${categoryNames}`
       );
-      // Update the set of notified categories
       setNotifiedExceededCategories((prev) => {
         const newSet = new Set(prev);
         newlyExceeded.forEach((item) => newSet.add(item.categoryName));
@@ -525,7 +476,6 @@ const BudgetsScreen = () => {
     notifiedExceededCategories,
   ]);
 
-  // --- Modal Handling ---
   const openModalForCategory = (item: BudgetDisplayData) => {
     setSelectedCategoryName(item.categoryName);
     setIsEditMode(!!item.budgetId);
@@ -542,15 +492,12 @@ const BudgetsScreen = () => {
     setBudgetLimit("");
   };
 
-  // --- Save/Update Budget Limit ---
   const handleSaveBudget = async () => {
     if (!currentUser) {
       Alert.alert("Login Required", "You must be logged in to save budgets.");
       return;
     }
-
     const limitValue = parseFloat(budgetLimit);
-
     if (!selectedCategoryName) {
       Alert.alert("Error", "Category not selected. Please try again.");
       return;
@@ -563,7 +510,6 @@ const BudgetsScreen = () => {
       return;
     }
 
-    // Find category info (icon) from combined list
     const allCategoriesMap = new Map<
       string,
       { name: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }
@@ -579,9 +525,7 @@ const BudgetsScreen = () => {
         });
       }
     });
-
     const categoryInfo = allCategoriesMap.get(selectedCategoryName);
-
     if (!categoryInfo) {
       Alert.alert("Error", "Internal error: Category details not found.");
       return;
@@ -590,19 +534,17 @@ const BudgetsScreen = () => {
     const budgetData = {
       categoryName: selectedCategoryName,
       limit: limitValue,
-      icon: categoryInfo.icon, // Include icon for consistency
+      icon: categoryInfo.icon,
     };
-
     const budgetsColRef = collection(
       db,
       "Accounts",
       currentUser.uid,
       "budgets"
-    ); // Use actual UID
+    );
 
     try {
       if (isEditMode && editingBudgetId) {
-        // Update existing budget document
         const budgetDocRef = doc(budgetsColRef, editingBudgetId);
         await updateDoc(budgetDocRef, budgetData);
         Alert.alert(
@@ -610,12 +552,10 @@ const BudgetsScreen = () => {
           `Budget limit for "${selectedCategoryName}" updated.`
         );
       } else {
-        // Check if a budget doc already exists for this category (shouldn't happen if editingBudgetId is null, but good practice)
         const existingBudget = budgetDefinitions.find(
           (b) => b.categoryName === selectedCategoryName
         );
         if (existingBudget) {
-          // Update if found unexpectedly
           Alert.alert(
             "Info",
             `Budget for "${selectedCategoryName}" already exists. Updating limit.`
@@ -623,7 +563,6 @@ const BudgetsScreen = () => {
           const budgetDocRef = doc(budgetsColRef, existingBudget.id);
           await updateDoc(budgetDocRef, budgetData);
         } else {
-          // Add new budget document
           await addDoc(budgetsColRef, budgetData);
           Alert.alert(
             "Success",
@@ -631,7 +570,7 @@ const BudgetsScreen = () => {
           );
         }
       }
-      closeModal(); // Close modal on success
+      closeModal();
     } catch (err: any) {
       console.error("Error saving budget:", err);
       Alert.alert(
@@ -641,7 +580,6 @@ const BudgetsScreen = () => {
     }
   };
 
-  // --- Delete Budget Limit ---
   const handleDeleteBudget = (
     budgetId: string | null,
     categoryName: string
@@ -650,7 +588,6 @@ const BudgetsScreen = () => {
       Alert.alert("Login Required", "You must be logged in to delete budgets.");
       return;
     }
-
     if (!budgetId) {
       Alert.alert(
         "Info",
@@ -671,7 +608,7 @@ const BudgetsScreen = () => {
             const budgetDocRef = doc(
               db,
               "Accounts",
-              currentUser.uid, // Use actual UID
+              currentUser.uid,
               "budgets",
               budgetId
             );
@@ -681,7 +618,6 @@ const BudgetsScreen = () => {
                 "Success",
                 `Budget limit for "${categoryName}" removed.`
               );
-              // Firestore listener will update the UI
             } catch (err: any) {
               console.error("Error deleting budget limit:", err);
               Alert.alert(
@@ -698,9 +634,6 @@ const BudgetsScreen = () => {
     );
   };
 
-  // --- Rendering Logic ---
-
-  // Renders a single budget item in the FlatList, potentially with a header
   const renderBudgetItem = ({
     item,
     index,
@@ -715,22 +648,17 @@ const BudgetsScreen = () => {
       : 0;
     let header = null;
 
-    // Check if this is the first item AND it has a budget
     if (index === 0 && hasBudgetSet) {
       header = (
         <Text style={styles.listSectionHeader}>Categories Budgeted</Text>
       );
-    }
-    // Check if this is the first item WITHOUT a budget
-    else if (index === firstUnbudgetedIndex) {
+    } else if (index === firstUnbudgetedIndex) {
       header = <Text style={styles.listSectionHeader}>Not Budgeted</Text>;
     }
 
     return (
       <>
-        {/* Render the header if it exists */}
         {header}
-        {/* Render the actual budget item */}
         <TouchableOpacity
           onPress={() => openModalForCategory(item)}
           activeOpacity={0.7}
@@ -748,7 +676,7 @@ const BudgetsScreen = () => {
               <Text style={styles.budgetCategoryTitle}>
                 {item.categoryName}
               </Text>
-              {hasBudgetSet ? ( // Display spending vs limit if budget is set
+              {hasBudgetSet ? (
                 <View>
                   <Text
                     style={[
@@ -758,17 +686,14 @@ const BudgetsScreen = () => {
                   >
                     Spent:{" "}
                     {formatCurrency(item.currentSpending, selectedCurrency)} /{" "}
-                    {/* Pass currency */}
-                    {formatCurrency(item.limit, selectedCurrency)}{" "}
-                    {/* Pass currency */}
+                    {formatCurrency(item.limit, selectedCurrency)}
                   </Text>
-                  {/* Simple Progress Bar */}
                   <View style={styles.progressBarContainer}>
                     <View
                       style={[
                         styles.progressBarFill,
-                        { width: `${Math.min(spendingPercentage, 100)}%` }, // Cap at 100% width
-                        isOverBudget && styles.overBudgetProgress, // Red color if over budget
+                        { width: `${Math.min(spendingPercentage, 100)}%` },
+                        isOverBudget && styles.overBudgetProgress,
                       ]}
                     />
                   </View>
@@ -783,21 +708,19 @@ const BudgetsScreen = () => {
               {hasBudgetSet ? (
                 <TouchableOpacity
                   onPress={(e) => {
-                    // Prevent the parent TouchableOpacity from firing
                     e.stopPropagation();
                     handleDeleteBudget(item.budgetId, item.categoryName);
                   }}
                   style={styles.actionButton}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} // Increase touch area
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                   <MaterialIcons
                     name="delete-outline"
                     size={22}
-                    color="#D32F2F" // Red color for delete
+                    color="#D32F2F"
                   />
                 </TouchableOpacity>
               ) : (
-                // Render a placeholder to maintain layout consistency
                 <View style={styles.actionButtonPlaceholder} />
               )}
             </View>
@@ -807,9 +730,7 @@ const BudgetsScreen = () => {
     );
   };
 
-  // Renders the main content area (Loading, Error, or List)
   const renderContent = () => {
-    // Show message if user is not logged in (and auth check is done)
     if (
       !currentUser &&
       !isLoadingBudgets &&
@@ -834,7 +755,7 @@ const BudgetsScreen = () => {
       );
     }
 
-    const combinedError = [errorBudgets, errorUserCategories, errorTransactions] // Include transaction errors
+    const combinedError = [errorBudgets, errorUserCategories, errorTransactions]
       .filter(Boolean)
       .join("\n");
     if (combinedError) {
@@ -862,171 +783,174 @@ const BudgetsScreen = () => {
       );
     }
 
-    // Render the FlatList with the combined budget items
     return (
       <FlatList
-        data={displayItems} // Use the sorted array
-        renderItem={renderBudgetItem} // Use the updated render function
+        data={displayItems}
+        renderItem={renderBudgetItem}
         keyExtractor={(item) => item.categoryName}
         style={styles.budgetList}
         contentContainerStyle={styles.budgetListContent}
-        // Remove ListHeaderComponent, headers are now rendered inline
       />
     );
   };
 
-  // --- Component Return JSX ---
   return (
     <>
-      <View style={styles.container}>
-        <HeaderTopNav />
-        <View style={styles.content}>{renderContent()}</View>
+      {/* Use SafeAreaView for the main screen content area, excluding the bottom nav */}
+      <SafeAreaView style={styles.safeAreaContainer}>
+        {/* Header remains outside SafeAreaView */}
+        <View style={styles.headerContainer}>
+          <HeaderTopNav />
+        </View>
+        {/* Content area */}
+        <View style={styles.content}>
+          {renderContent()}
+          {/* FAB */}
+          {currentUser &&
+            !isLoadingBudgets &&
+            !isLoadingUserCategories &&
+            !isLoadingTransactions && (
+              <TouchableOpacity
+                style={styles.fab}
+                onPress={navigateToTransaction}
+              >
+                <MaterialIcons name="add" size={28} color="white" />
+              </TouchableOpacity>
+            )}
+        </View>
+      </SafeAreaView>
 
-        {/* --- Modal for Setting/Editing Budget Limit --- */}
-        <Modal
-          visible={isModalVisible}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={closeModal}
-        >
-          <View style={styles.modalBackdrop}>
-            {/* Use ScrollView to help with keyboard covering input */}
-            <ScrollView
-              contentContainerStyle={styles.modalScrollViewContainer}
-              keyboardShouldPersistTaps="handled"
-            >
-              <View style={styles.modalContainer}>
-                <Text style={styles.modalTitle}>
-                  {isEditMode ? "Edit Budget Limit" : "Set Budget Limit"}
-                </Text>
-                {selectedCategoryName && (
-                  <View style={styles.modalCategoryDisplay}>
-                    <Text style={styles.modalLabel}>For Category:</Text>
-                    <Text style={styles.modalCategoryName}>
-                      {selectedCategoryName}
-                    </Text>
-                  </View>
-                )}
-                <Text style={styles.modalLabel}>Budget Limit (₱):</Text>
-                <TextInput
-                  style={styles.modalInput}
-                  placeholder="e.g., 5000"
-                  keyboardType="numeric"
-                  value={budgetLimit}
-                  onChangeText={setBudgetLimit}
-                  placeholderTextColor="#999"
-                  autoFocus={true}
-                />
-                <View style={styles.modalButtons}>
-                  <TouchableOpacity
-                    style={[styles.modalButton, styles.modalCancelButton]}
-                    onPress={closeModal}
-                  >
-                    <Text style={styles.modalCancelButtonText}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.modalButton,
-                      styles.modalSaveButton,
-                      // Disable if no user or invalid limit
-                      (!currentUser ||
-                        !budgetLimit ||
-                        parseFloat(budgetLimit) <= 0) &&
-                        styles.modalSaveButtonDisabled,
-                    ]}
-                    onPress={handleSaveBudget}
-                    disabled={
-                      !currentUser ||
-                      !budgetLimit ||
-                      parseFloat(budgetLimit) <= 0
-                    }
-                  >
-                    <Text style={styles.modalSaveButtonText}>
-                      {isEditMode ? "Update Limit" : "Set Limit"}
-                    </Text>
-                  </TouchableOpacity>
+      {/* Modal for Setting/Editing Budget Limit */}
+      <Modal
+        visible={isModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={closeModal}
+      >
+        {/* Wrap modal content in SafeAreaView */}
+        <SafeAreaView style={styles.modalSafeArea}>
+          <ScrollView
+            contentContainerStyle={styles.modalScrollViewContainer}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.modalContainer}>
+              <Text style={styles.modalTitle}>
+                {isEditMode ? "Edit Budget Limit" : "Set Budget Limit"}
+              </Text>
+              {selectedCategoryName && (
+                <View style={styles.modalCategoryDisplay}>
+                  <Text style={styles.modalLabel}>For Category:</Text>
+                  <Text style={styles.modalCategoryName}>
+                    {selectedCategoryName}
+                  </Text>
                 </View>
+              )}
+              <Text style={styles.modalLabel}>
+                Budget Limit (
+                {CURRENCY_SYMBOLS[selectedCurrency] || selectedCurrency}):
+              </Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="e.g., 5000"
+                keyboardType="numeric"
+                value={budgetLimit}
+                onChangeText={setBudgetLimit}
+                placeholderTextColor="#999"
+                autoFocus={true}
+              />
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalCancelButton]}
+                  onPress={closeModal}
+                >
+                  <Text style={styles.modalCancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.modalButton,
+                    styles.modalSaveButton,
+                    (!currentUser ||
+                      !budgetLimit ||
+                      parseFloat(budgetLimit) <= 0) &&
+                      styles.modalSaveButtonDisabled,
+                  ]}
+                  onPress={handleSaveBudget}
+                  disabled={
+                    !currentUser || !budgetLimit || parseFloat(budgetLimit) <= 0
+                  }
+                >
+                  <Text style={styles.modalSaveButtonText}>
+                    {isEditMode ? "Update Limit" : "Set Limit"}
+                  </Text>
+                </TouchableOpacity>
               </View>
-            </ScrollView>
-          </View>
-        </Modal>
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
 
-        <TouchableOpacity style={styles.fab} onPress={navigateToTransaction}>
-          <MaterialIcons name="add" size={28} color="white" />
-        </TouchableOpacity>
-      </View>
+      {/* Bottom Nav remains outside SafeAreaView */}
       <BotNavigationBar />
     </>
   );
 };
 
-// --- Styles ---
 const styles = StyleSheet.create({
-  container: {
+  safeAreaContainer: {
     flex: 1,
-    backgroundColor: "#f0f0f0", // Light grey background
+    backgroundColor: "#f0f0f0", // Match background
+  },
+  // container style removed
+  headerContainer: {
+    // Removed paddingTop
+    backgroundColor: "#006400",
   },
   content: {
-    // This View wraps the FlatList or loading/error states
-    flex: 1,
+    flex: 1, // Takes remaining space
   },
-  // Removed sectionTitle style as it's replaced by listSectionHeader
   listSectionHeader: {
-    // Style for the new inline headers
     fontSize: 16,
     fontWeight: "bold",
-    color: "#444", // Slightly darker than sectionTitle
-    backgroundColor: "#f0f0f0", // Match list background
+    color: "#444",
+    backgroundColor: "#f0f0f0",
     paddingVertical: 8,
-    paddingHorizontal: 15, // Match list padding
-    marginTop: 10, // Add some space above the header
-    marginBottom: 5, // Space between header and first item
+    paddingHorizontal: 15,
+    marginTop: 10,
+    marginBottom: 5,
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
-  budgetList: {
-    flex: 1,
-  },
-  budgetListContent: {
-    paddingHorizontal: 15, // Keep padding for items
-    paddingBottom: 90, // Space for FAB and bottom nav
-  },
+  budgetList: { flex: 1 },
+  budgetListContent: { paddingHorizontal: 15, paddingBottom: 90 },
   touchableItem: {
     marginBottom: 12,
     borderRadius: 8,
-    backgroundColor: "#fff", // White background for items
+    backgroundColor: "#fff",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 3,
-    // Remove marginHorizontal if list padding handles it
   },
   budgetItem: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 15,
     paddingLeft: 15,
-    paddingRight: 10, // Reduced right padding to bring delete icon closer
-    borderRadius: 8, // Match touchableItem
+    paddingRight: 10,
+    borderRadius: 8,
   },
   budgetIconContainer: {
     width: 45,
     height: 45,
     borderRadius: 22.5,
-    backgroundColor: "#e0f2e0", // Light green background
+    backgroundColor: "#e0f2e0",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 15,
   },
-  budgetIcon: {
-    color: "#006400", // Dark green icon
-  },
-  budgetDetails: {
-    flex: 1, // Take available space
-    marginRight: 10, // Space before action button
-    justifyContent: "center", // Vertically center text
-  },
+  budgetIcon: { color: "#006400" },
+  budgetDetails: { flex: 1, marginRight: 10, justifyContent: "center" },
   budgetCategoryTitle: {
     fontSize: 16,
     fontWeight: "bold",
@@ -1034,55 +958,44 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   budgetInfoText: {
-    fontSize: 13, // Slightly smaller
-    color: "#006400", // Green for set limit
+    fontSize: 13,
+    color: "#006400",
     fontWeight: "500",
     marginTop: 2,
   },
-  overBudgetAmount: {
-    color: "#D32F2F", // Red color when over budget
-    fontWeight: "bold",
-  },
+  overBudgetAmount: { color: "#D32F2F", fontWeight: "bold" },
   budgetInfoTextMuted: {
     fontSize: 13,
-    color: "#888", // Grey for placeholder text
+    color: "#888",
     marginTop: 2,
     fontStyle: "italic",
   },
   progressBarContainer: {
-    height: 6, // Thin progress bar
-    backgroundColor: "#e0e0e0", // Light grey background
+    height: 6,
+    backgroundColor: "#e0e0e0",
     borderRadius: 3,
-    marginTop: 5, // Space above progress bar
+    marginTop: 5,
     overflow: "hidden",
   },
   progressBarFill: {
     height: "100%",
-    backgroundColor: "#4CAF50", // Green fill
+    backgroundColor: "#4CAF50",
     borderRadius: 3,
   },
   budgetActions: {
     justifyContent: "center",
     alignItems: "center",
-    minWidth: 38, // Ensure space for the button
+    minWidth: 38,
   },
-  actionButton: {
-    padding: 8, // Make touch area slightly larger
-  },
-  actionButtonPlaceholder: {
-    // To maintain layout when delete button isn't shown
-    width: 38, // Match approx width of the icon + padding
-    height: 38,
-  },
-  overBudgetProgress: {
-    backgroundColor: "#D32F2F", // Red fill when over budget
-  },
+  actionButton: { padding: 8 },
+  actionButtonPlaceholder: { width: 38, height: 38 },
+  overBudgetProgress: { backgroundColor: "#D32F2F" },
   centeredStateContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
-    marginTop: -50, // Adjust to roughly center vertically
+    marginTop: -50,
   },
   centeredStateText: {
     fontSize: 17,
@@ -1091,16 +1004,13 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     textAlign: "center",
   },
-  errorText: {
-    color: "red",
-    fontWeight: "bold",
-  },
+  errorText: { color: "red", fontWeight: "bold" },
   fab: {
     position: "absolute",
-    bottom: 70, // Adjusted for bottom nav bar
+    bottom: 20,
     right: 20,
-    backgroundColor: "#0F730C", // Dark green
-    width: 56, // Standard FAB size
+    backgroundColor: "#0F730C",
+    width: 56,
     height: 56,
     borderRadius: 28,
     justifyContent: "center",
@@ -1110,20 +1020,21 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowOffset: { width: 0, height: 3 },
     shadowRadius: 4,
+    zIndex: 1,
   },
-  // --- Modal Styles ---
-  modalBackdrop: {
+  modalSafeArea: {
+    // Style for modal SafeAreaView
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "rgba(0, 0, 0, 0.6)",
   },
+  // modalBackdrop removed, replaced by modalSafeArea
   modalScrollViewContainer: {
-    // Allows modal content to scroll if keyboard appears
     flexGrow: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingVertical: 40, // Add padding for spacing
+    paddingVertical: 40,
     width: "100%",
   },
   modalContainer: {
@@ -1132,7 +1043,7 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     borderRadius: 10,
     padding: 25,
-    alignItems: "stretch", // Stretch children like input
+    alignItems: "stretch",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
@@ -1142,14 +1053,14 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#006400", // Dark green title
+    color: "#006400",
     marginBottom: 20,
     textAlign: "center",
   },
   modalCategoryDisplay: {
     marginBottom: 20,
     padding: 10,
-    backgroundColor: "#f8f9fa", // Light background for category display
+    backgroundColor: "#f8f9fa",
     borderRadius: 6,
     borderWidth: 1,
     borderColor: "#eee",
@@ -1173,8 +1084,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     marginBottom: 25,
-    fontSize: 18, // Slightly larger for input
-    backgroundColor: "#f9f9f9", // Light background for input
+    fontSize: 18,
+    backgroundColor: "#f9f9f9",
     color: "#333",
   },
   modalButtons: {
@@ -1183,11 +1094,11 @@ const styles = StyleSheet.create({
     marginTop: 15,
   },
   modalButton: {
-    flex: 1, // Equal width
+    flex: 1,
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: "center",
-    marginHorizontal: 5, // Space between buttons
+    marginHorizontal: 5,
   },
   modalCancelButton: {
     backgroundColor: "#f8f9fa",
@@ -1195,25 +1106,17 @@ const styles = StyleSheet.create({
     borderColor: "#ced4da",
   },
   modalSaveButton: {
-    backgroundColor: "#DAA520", // Gold color
+    backgroundColor: "#DAA520",
     borderWidth: 1,
     borderColor: "#DAA520",
   },
   modalSaveButtonDisabled: {
-    backgroundColor: "#e9d8a1", // Lighter gold when disabled
+    backgroundColor: "#e9d8a1",
     borderColor: "#e9d8a1",
     opacity: 0.7,
   },
-  modalCancelButtonText: {
-    color: "#495057",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  modalSaveButtonText: {
-    color: "white",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
+  modalCancelButtonText: { color: "#495057", fontSize: 16, fontWeight: "bold" },
+  modalSaveButtonText: { color: "white", fontSize: 16, fontWeight: "bold" },
 });
 
 export default BudgetsScreen;

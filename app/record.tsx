@@ -8,25 +8,26 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  // Platform removed
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context"; // Import SafeAreaView
 import HeaderTopNav from "../components/headertopnav";
 import BotNavigationBar from "../components/botnavigationbar";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { useRouter } from "expo-router"; // <-- Use useRouter
+import { useRouter } from "expo-router";
 import {
   collection,
   query,
   onSnapshot,
   orderBy,
   Timestamp,
-  where, // Import where
+  where,
 } from "firebase/firestore";
-import { getAuth, onAuthStateChanged, User } from "firebase/auth"; // Import Firebase Auth
-import { app, db, auth } from "../app/firebase"; // Import initialized db and auth
-import { useDateContext } from "./context/DateContext"; // Import the context hook
-import { formatCurrency } from "../utils/formatting"; // <-- Import shared function
+import { onAuthStateChanged, User } from "firebase/auth";
+import { db, auth } from "../app/firebase";
+import { useDateContext } from "./context/DateContext";
+import { formatCurrency } from "../utils/formatting";
 
-// Interface for Firestore transaction data
 interface Transaction {
   id: string;
   type: "Income" | "Expenses";
@@ -34,11 +35,10 @@ interface Transaction {
   categoryIcon: keyof typeof MaterialCommunityIcons.glyphMap;
   amount: number;
   timestamp: Timestamp;
-  accountId: string | null; // Allow accountId to be null
+  accountId: string | null;
   accountName?: string;
 }
 
-// Helper function to format Firestore Timestamp (Keep as is)
 const formatFirestoreTimestamp = (
   timestamp: Timestamp | null | undefined
 ): string => {
@@ -56,7 +56,6 @@ const formatFirestoreTimestamp = (
   }
 };
 
-// Helper to get month number (0-indexed)
 const getMonthNumber = (monthName: string): number => {
   const months = [
     "Jan",
@@ -76,19 +75,18 @@ const getMonthNumber = (monthName: string): number => {
 };
 
 const HistoryScreen = () => {
-  const router = useRouter(); // <-- Use useRouter
-  const { selectedYear, selectedMonth, selectedCurrency } = useDateContext(); // Get date and currency
+  const router = useRouter();
+  const { selectedYear, selectedMonth, selectedCurrency } = useDateContext();
 
-  const [currentUser, setCurrentUser] = useState<User | null>(null); // State for the current user
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const navigateToTransaction = () => {
-    router.push("/transactions"); // <-- Use router.push instead of navigation.navigate
+    router.push("/transactions");
   };
 
-  // --- Listen for Auth State Changes ---
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
@@ -96,21 +94,19 @@ const HistoryScreen = () => {
         console.log("Record: No user logged in.");
         setLoading(false);
         setError("Please log in to view records.");
-        setTransactions([]); // Clear records if user logs out
+        setTransactions([]);
       }
     });
     return () => unsubscribeAuth();
   }, []);
 
-  // --- Fetch Transactions based on User and Date Context ---
   useEffect(() => {
-    if (!currentUser) return; // Don't fetch if no user
+    if (!currentUser) return;
 
     setLoading(true);
     setError(null);
-    setTransactions([]); // Clear previous transactions
+    setTransactions([]);
 
-    // --- Calculate date range based on context ---
     const monthNumber = getMonthNumber(selectedMonth);
     if (monthNumber < 0) {
       setError("Invalid month selected in context.");
@@ -118,30 +114,27 @@ const HistoryScreen = () => {
       return;
     }
     const startDate = new Date(selectedYear, monthNumber, 1, 0, 0, 0);
-    const endDate = new Date(selectedYear, monthNumber + 1, 1, 0, 0, 0); // Start of the *next* month
+    const endDate = new Date(selectedYear, monthNumber + 1, 1, 0, 0, 0);
     const startTimestamp = Timestamp.fromDate(startDate);
     const endTimestamp = Timestamp.fromDate(endDate);
-    // --- End date range calculation ---
 
     const transactionsCollectionRef = collection(
       db,
       "Accounts",
-      currentUser.uid, // Use actual user UID
+      currentUser.uid,
       "transactions"
     );
 
-    // --- Update the query to filter by date ---
     const q = query(
       transactionsCollectionRef,
-      where("timestamp", ">=", startTimestamp), // Filter start date
-      where("timestamp", "<", endTimestamp), // Filter end date (exclusive)
-      orderBy("timestamp", "desc") // Keep ordering
+      where("timestamp", ">=", startTimestamp),
+      where("timestamp", "<", endTimestamp),
+      orderBy("timestamp", "desc")
     );
-    // --- End query update ---
 
     console.log(
       `Fetching transactions from ${startDate.toISOString()} to ${endDate.toISOString()}`
-    ); // For debugging
+    );
 
     const unsubscribe = onSnapshot(
       q,
@@ -149,7 +142,6 @@ const HistoryScreen = () => {
         const fetchedTransactions: Transaction[] = [];
         querySnapshot.forEach((doc) => {
           const data = doc.data();
-          // Validation (Keep as is)
           if (
             data &&
             typeof data.type === "string" &&
@@ -157,7 +149,7 @@ const HistoryScreen = () => {
             typeof data.categoryIcon === "string" &&
             typeof data.amount === "number" &&
             data.timestamp instanceof Timestamp &&
-            (typeof data.accountId === "string" || data.accountId === null) // Allow string or null
+            (typeof data.accountId === "string" || data.accountId === null)
           ) {
             fetchedTransactions.push({
               id: doc.id,
@@ -165,10 +157,10 @@ const HistoryScreen = () => {
               categoryName: data.categoryName,
               categoryIcon:
                 (data.categoryIcon as keyof typeof MaterialCommunityIcons.glyphMap) ||
-                "help-circle-outline", // Default icon if invalid
+                "help-circle-outline",
               amount: data.amount,
               timestamp: data.timestamp,
-              accountId: data.accountId, // This will now correctly handle null
+              accountId: data.accountId,
               accountName: data.accountName || "Unknown Account",
             });
           } else {
@@ -187,7 +179,6 @@ const HistoryScreen = () => {
           setError(
             "Query requires an index. Check Firestore console for index creation link."
           );
-          // Log the specific error to the console for the developer
           console.error("Firestore Index Required:", err.message);
         }
         setLoading(false);
@@ -200,11 +191,9 @@ const HistoryScreen = () => {
       );
       unsubscribe();
     };
-  }, [currentUser, selectedYear, selectedMonth]); // Re-run if user or date changes
+  }, [currentUser, selectedYear, selectedMonth]);
 
-  // --- renderContent (Grouping and rendering logic remains the same) ---
   const renderContent = () => {
-    // Show message if user is not logged in (and auth check is done)
     if (!currentUser && !loading) {
       return (
         <View style={styles.centered}>
@@ -260,7 +249,6 @@ const HistoryScreen = () => {
       );
     }
 
-    // Group transactions by date
     const groupedTransactions: { [date: string]: Transaction[] } = {};
     transactions.forEach((transaction) => {
       const dateStr = formatFirestoreTimestamp(transaction.timestamp);
@@ -298,10 +286,8 @@ const HistoryScreen = () => {
                         transaction.type === "Income"
                           ? styles.income
                           : styles.expense
-                      } // Apply style based on type
+                      }
                     >
-                      {" "}
-                      {/* Let formatCurrency handle sign and symbol */}
                       {formatCurrency(transaction.amount, selectedCurrency)}
                     </Text>
                   </View>
@@ -314,29 +300,46 @@ const HistoryScreen = () => {
     );
   };
 
-  // --- Main Return (remains the same) ---
   return (
     <>
-      <View style={styles.container}>
-        <HeaderTopNav />
-        {renderContent()}
-        {/* Render FAB only if user is logged in */}
-        {currentUser && (
-          <TouchableOpacity style={styles.fab} onPress={navigateToTransaction}>
-            <MaterialIcons name="add" size={28} color="white" />
-          </TouchableOpacity>
-        )}
-      </View>
+      {/* Use SafeAreaView for the main screen content area, excluding the bottom nav */}
+      <SafeAreaView style={styles.safeAreaContainer}>
+        {/* Header remains outside SafeAreaView to span full width */}
+        <View style={styles.headerContainer}>
+          <HeaderTopNav />
+        </View>
+        {/* Content area */}
+        <View style={styles.mainContentContainer}>
+          {renderContent()}
+          {/* FAB */}
+          {currentUser &&
+            !loading && ( // Also hide FAB while loading
+              <TouchableOpacity
+                style={styles.fab}
+                onPress={navigateToTransaction}
+              >
+                <MaterialIcons name="add" size={28} color="white" />
+              </TouchableOpacity>
+            )}
+        </View>
+      </SafeAreaView>
+      {/* Bottom Nav remains outside SafeAreaView */}
       <BotNavigationBar />
     </>
   );
 };
 
-// --- Styles (remain the same) ---
 const styles = StyleSheet.create({
+  safeAreaContainer: {
+    flex: 1,
+    backgroundColor: "#f8f9fa", // Match background
+  },
+  mainContentContainer: {
+    flex: 1, // Takes remaining space
+  },
   fab: {
     position: "absolute",
-    bottom: 70,
+    bottom: 20, // Adjusted bottom position (relative to mainContentContainer)
     right: 20,
     backgroundColor: "#0F730C",
     width: 56,
@@ -349,20 +352,22 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowOffset: { width: 0, height: 4 },
     shadowRadius: 4,
+    zIndex: 1, // Ensure FAB is above ScrollView content
   },
-  container: {
-    flex: 1,
-    backgroundColor: "#f8f9fa",
+  headerContainer: {
+    // Removed paddingTop, HeaderTopNav handles its internal padding
+    backgroundColor: "#006400",
   },
+  // container style removed as SafeAreaView is the main container now
   content: {
-    flex: 1,
+    flex: 1, // Ensure ScrollView takes space
   },
   centered: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
-    paddingBottom: 80, // Add padding to avoid FAB overlap
+    // Removed paddingBottom, FAB positioning handles overlap
   },
   infoText: {
     marginTop: 10,

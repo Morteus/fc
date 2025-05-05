@@ -14,9 +14,10 @@ import {
   Keyboard,
   ActivityIndicator,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context"; // Import SafeAreaView
 import { useRouter, Stack } from "expo-router";
-import { sendPasswordResetEmail } from "firebase/auth"; // Keep needed auth imports
-import { auth } from "./firebase"; // Import initialized auth
+import { sendPasswordResetEmail } from "firebase/auth";
+import { auth } from "./firebase";
 
 const ForgotPasswordScreen = () => {
   const router = useRouter();
@@ -25,16 +26,14 @@ const ForgotPasswordScreen = () => {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // --- Validation ---
   const validateEmail = (): boolean => {
-    setError(null); // Clear previous messages
+    setError(null);
     setSuccessMessage(null);
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
       setError("Please enter your email address.");
       return false;
     }
-    // Basic email format check
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(trimmedEmail)) {
       setError("Please enter a valid email address.");
@@ -43,12 +42,9 @@ const ForgotPasswordScreen = () => {
     return true;
   };
 
-  // --- Handle Password Reset ---
   const handlePasswordReset = async () => {
     Keyboard.dismiss();
-    if (!validateEmail()) {
-      return; // Stop if validation fails
-    }
+    if (!validateEmail()) return;
 
     setIsLoading(true);
     setError(null);
@@ -60,16 +56,12 @@ const ForgotPasswordScreen = () => {
       setSuccessMessage(
         `Password reset email sent to ${trimmedEmail}. Please check your inbox (and spam folder).`
       );
-      setEmail(""); // Clear email field on success
+      setEmail("");
     } catch (error: any) {
       console.error("Password Reset Error:", error);
       let userFriendlyError =
         "Failed to send password reset email. Please try again.";
-      // Handle specific Firebase errors
       if (error.code === "auth/user-not-found") {
-        // Note: For security, you might not want to reveal if an email exists.
-        // Consider showing a generic message like the success one even if the user isn't found.
-        // However, for better UX during development/testing, specific errors are helpful.
         userFriendlyError =
           "No account found with this email address. Please check the email or sign up.";
       } else if (error.code === "auth/invalid-email") {
@@ -81,79 +73,77 @@ const ForgotPasswordScreen = () => {
     }
   };
 
-  // --- Navigate Back to Login ---
   const navigateToLogin = () => {
-    // Check if we can go back in the navigation stack
     if (router.canGoBack()) {
       router.back();
     } else {
-      // Fallback if cannot go back (e.g., deep link)
-      router.replace("/"); // Assuming '/' is your login screen route
+      router.replace("/");
     }
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={styles.keyboardAvoidingContainer}
-    >
-      {/* Set the header title for this screen */}
-      <Stack.Screen options={{ title: "Reset Password" }} />
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <ScrollView
-          contentContainerStyle={styles.scrollContainer}
-          keyboardShouldPersistTaps="handled" // Allows taps on buttons while keyboard is up
-        >
-          <View style={styles.innerContainer}>
-            <Text style={styles.title}>Forgot Password?</Text>
-            <Text style={styles.subtitle}>
-              Enter your email address below and we'll send you a link to reset
-              your password.
-            </Text>
+    // Use SafeAreaView as the top-level container
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.keyboardAvoidingContainer}
+      >
+        <Stack.Screen options={{ title: "Reset Password" }} />
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <ScrollView
+            contentContainerStyle={styles.scrollContainer}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.innerContainer}>
+              <Text style={styles.title}>Forgot Password?</Text>
+              <Text style={styles.subtitle}>
+                Enter your email address below and we'll send you a link to
+                reset your password.
+              </Text>
 
-            {/* Display Error or Success Message */}
-            {error && <Text style={styles.errorText}>{error}</Text>}
-            {successMessage && (
-              <Text style={styles.successText}>{successMessage}</Text>
-            )}
-
-            <TextInput
-              style={styles.input}
-              placeholder="Enter your email"
-              keyboardType="email-address"
-              placeholderTextColor="#888"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              autoComplete="email"
-              editable={!isLoading} // Disable input while loading
-            />
-
-            <TouchableOpacity
-              style={[styles.button, isLoading && styles.buttonDisabled]}
-              onPress={handlePasswordReset}
-              disabled={isLoading} // Disable button while loading
-            >
-              {isLoading ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>Send Reset Link</Text>
+              {error && <Text style={styles.errorText}>{error}</Text>}
+              {successMessage && (
+                <Text style={styles.successText}>{successMessage}</Text>
               )}
-            </TouchableOpacity>
 
-            <TouchableOpacity onPress={navigateToLogin} disabled={isLoading}>
-              <Text style={styles.toggleText}>Back to Login</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </TouchableWithoutFeedback>
-    </KeyboardAvoidingView>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your email"
+                keyboardType="email-address"
+                placeholderTextColor="#888"
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                autoComplete="email"
+                editable={!isLoading}
+              />
+
+              <TouchableOpacity
+                style={[styles.button, isLoading && styles.buttonDisabled]}
+                onPress={handlePasswordReset}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.buttonText}>Send Reset Link</Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={navigateToLogin} disabled={isLoading}>
+                <Text style={styles.toggleText}>Back to Login</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
-// --- Styles (You can adapt these to match your app's theme) ---
 const styles = StyleSheet.create({
-  keyboardAvoidingContainer: { flex: 1, backgroundColor: "#FFFFFF" },
+  safeArea: { flex: 1, backgroundColor: "#FFFFFF" }, // Apply background to SafeAreaView
+  keyboardAvoidingContainer: { flex: 1 }, // Removed background color here
   scrollContainer: {
     flexGrow: 1,
     justifyContent: "center",
