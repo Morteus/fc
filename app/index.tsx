@@ -1,4 +1,4 @@
-// c:\Users\scubo\Downloads\FinClassify-dea0c4be4da0318ed62b8b3aa713817c40b0002f\FinClassifyApp\app\index.tsx
+// c:\Users\scubo\OneDrive\Documents\putangina\fc\app\index.tsx
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -17,90 +17,21 @@ import {
 } from "react-native";
 import { useRouter, Stack } from "expo-router"; // Import Stack for header config
 import {
-  getAuth,
-  signInWithCredential,
-  GoogleAuthProvider,
+  // getAuth, // No longer needed here
   signInWithEmailAndPassword, // Only need Sign In for this screen
 } from "firebase/auth";
-import {
-  GoogleSignin,
-  statusCodes,
-} from "@react-native-google-signin/google-signin";
-import { app } from "./firebase"; // Import your Firebase app instance
 
-// Initialize Firebase Auth
-const auth = getAuth(app);
+import { auth } from "./firebase"; // <-- Import initialized auth instance
 
 const LoginScreen = () => {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false); // Separate loading for Google
   const [error, setError] = useState<string | null>(null); // State for inline errors
-
-  // --- Google Sign-In Configuration ---
-  useEffect(() => {
-    GoogleSignin.configure({
-      webClientId:
-        "523821328429-3oupi8optbht8hh4sa2gp6rr9r6dq5de.apps.googleusercontent.com",
-      offlineAccess: true,
-    });
-  }, []);
-
-  // --- Google Sign-In Handler ---
-  const onGoogleButtonPress = async () => {
-    if (isLoading) return;
-    setIsGoogleLoading(true);
-    setIsLoading(true);
-    setError(null); // Clear previous errors
-    try {
-      await GoogleSignin.hasPlayServices({
-        showPlayServicesUpdateDialog: true,
-      });
-      const signInResponse = await GoogleSignin.signIn();
-      const idToken =
-        (signInResponse as any)?.user?.idToken ??
-        (signInResponse as any)?.idToken;
-
-      if (!idToken) {
-        throw new Error("Google Sign-In failed: ID token missing.");
-      }
-
-      const googleCredential = GoogleAuthProvider.credential(idToken);
-      const userCredential = await signInWithCredential(auth, googleCredential);
-
-      console.log("Signed in with Google!", userCredential.user);
-      Alert.alert(
-        "Google Sign-In Successful",
-        `Welcome ${userCredential.user.displayName || "User"}!`
-      );
-      router.replace("/record");
-    } catch (error: any) {
-      console.error("Google Sign-in Error:", error);
-      let userFriendlyError =
-        "An unknown error occurred during Google Sign-In.";
-      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
-        userFriendlyError = "Google Sign-In cancelled.";
-      } else if (error.code === statusCodes.IN_PROGRESS) {
-        userFriendlyError = "Sign-in is already in progress.";
-      } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-        userFriendlyError =
-          "Google Play Services is not available or outdated.";
-      } else {
-        userFriendlyError = error.message || userFriendlyError;
-      }
-      setError(userFriendlyError); // Show error inline
-      // Alert.alert("Google Sign-In Failed", userFriendlyError); // Optionally keep alert
-    } finally {
-      setIsGoogleLoading(false);
-      setIsLoading(false);
-    }
-  };
 
   // --- Email/Password Login Handler ---
   const handleLogin = () => {
-    if (isGoogleLoading) return;
     Keyboard.dismiss();
     setError(null); // Clear previous errors
 
@@ -180,7 +111,7 @@ const LoginScreen = () => {
             <TextInput
               style={styles.input}
               placeholder="Email"
-              keyboardType="email-address"
+              keyboardType="email-address" // Keep keyboardType
               placeholderTextColor="#888"
               value={email}
               onChangeText={setEmail}
@@ -192,7 +123,7 @@ const LoginScreen = () => {
               style={styles.input}
               placeholder="Password"
               secureTextEntry
-              placeholderTextColor="#888"
+              placeholderTextColor="#777" // Darken placeholder slightly
               value={password}
               onChangeText={setPassword}
               autoComplete="password"
@@ -202,7 +133,7 @@ const LoginScreen = () => {
             {/* Forgot Password Link */}
             <TouchableOpacity
               style={styles.forgotPasswordContainer} // Added container for better touch area
-              onPress={() => router.push("../forgotpassword")} // <<< Ensure this matches your file name (forgotpassword.tsx)
+              onPress={() => router.push("/forgotpassword")} // Use correct route name
               disabled={isLoading}
             >
               <Text style={styles.forgotPasswordText}>
@@ -212,14 +143,11 @@ const LoginScreen = () => {
 
             {/* --- Sign In Button --- */}
             <TouchableOpacity
-              style={[
-                styles.button,
-                isLoading && !isGoogleLoading && styles.buttonDisabled,
-              ]}
+              style={[styles.button, isLoading && styles.buttonDisabled]}
               onPress={handleLogin}
               disabled={isLoading}
             >
-              {isLoading && !isGoogleLoading ? (
+              {isLoading ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
                 <Text style={styles.buttonText}>Sign In</Text>
@@ -230,6 +158,7 @@ const LoginScreen = () => {
             <TouchableOpacity
               onPress={() => router.push("/signup")}
               disabled={isLoading}
+              style={styles.signUpLink} // Added style for spacing
             >
               <Text style={styles.toggleText}>Create new account</Text>
             </TouchableOpacity>
@@ -286,7 +215,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 8,
     marginBottom: 15,
-    borderColor: "#ccc",
+    borderColor: "#aaa", // Darken border slightly
     backgroundColor: "#fdfdfd",
     fontSize: 16,
     color: "#333",
@@ -327,14 +256,8 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     fontSize: 16,
   },
-  toggleText: {
-    marginTop: 10, // Reduced margin
-    color: "#006400",
-    fontSize: 15,
-    fontWeight: "bold",
-  },
   orContinueText: {
-    marginTop: 30,
+    marginTop: 20, // Adjusted margin
     fontSize: 14,
     color: "#666",
     marginBottom: 15,
@@ -353,7 +276,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 5,
     elevation: 4,
-    marginTop: 10,
+    marginTop: 0, // Removed margin top
     minHeight: 50,
   },
   googleIcon: {
@@ -366,7 +289,14 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     fontSize: 16,
   },
-  // Removed socialIcons and icon styles as only Google is used here
+  signUpLink: {
+    marginTop: 25, // Added margin top for spacing
+  },
+  toggleText: {
+    color: "#006400",
+    fontSize: 15,
+    fontWeight: "bold",
+  },
 });
 
 export default LoginScreen;

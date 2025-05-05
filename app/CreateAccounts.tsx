@@ -1,4 +1,4 @@
-// c:\Users\scubo\OneDrive\Documents\FC_proj\FinClassify\FinClassifyApp\app\CreateAccounts.tsx
+// c:\Users\scubo\OneDrive\Documents\putangina\fc\app\CreateAccounts.tsx
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -19,21 +19,17 @@ import {
 import { Stack, useRouter, useLocalSearchParams } from "expo-router"; // Import useLocalSearchParams
 import {
   getDoc, // Import getDoc
-  getFirestore,
+  // getFirestore, // No longer needed here
   collection,
   doc,
   runTransaction,
   serverTimestamp,
   updateDoc, // Import updateDoc
 } from "firebase/firestore";
-import { getAuth, onAuthStateChanged, User } from "firebase/auth";
-import { app } from "../app/firebase"; // Adjust path if needed
+import { onAuthStateChanged, User } from "firebase/auth"; // Keep needed auth imports
+import { db, auth } from "../app/firebase"; // Import initialized db and auth
 import { useDateContext } from "./context/DateContext"; // Import context for currency
 import { CURRENCY_SYMBOLS } from "../utils/formatting"; // Import symbols map
-
-// --- Firestore Initialization ---
-const db = getFirestore(app);
-const auth = getAuth(app); // Initialize Firebase Auth
 
 // --- Account Icon Data ---
 interface AccountImageOption {

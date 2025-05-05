@@ -1,4 +1,4 @@
-// c:\Users\scubo\Downloads\FinClassify-dea0c4be4da0318ed62b8b3aa713817c40b0002f\FinClassifyApp\app\profile.tsx
+// c:\Users\scubo\OneDrive\Documents\putangina\fc\app\profile.tsx
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons"; // Or any other icon library
 import {
-  getAuth,
+  // getAuth, // No longer needed here
   signOut,
   onAuthStateChanged,
   User,
@@ -25,11 +25,9 @@ import {
   updatePassword, // <-- Add updatePassword
 } from "firebase/auth"; // Import Firebase Auth
 import { useRouter } from "expo-router";
-import { app } from "./firebase"; // Import your Firebase app instance
+import { auth } from "./firebase"; // Import initialized auth
 import { useDateContext } from "./context/DateContext"; // Import context for currency
 import { CURRENCY_SYMBOLS } from "../utils/formatting"; // <-- Import shared symbols
-
-const auth = getAuth(app);
 
 // --- Available Currencies ---
 // TODO: Fetch this from a config or remote source in a real app

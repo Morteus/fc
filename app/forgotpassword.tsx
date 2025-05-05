@@ -1,4 +1,4 @@
-// c:\Users\scubo\Downloads\FinClassify-dea0c4be4da0318ed62b8b3aa713817c40b0002f\FinClassifyApp\app\forgot-password.tsx
+// c:\Users\scubo\OneDrive\Documents\putangina\fc\app\forgotpassword.tsx
 import React, { useState } from "react";
 import {
   View,
@@ -15,11 +15,8 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useRouter, Stack } from "expo-router";
-import { getAuth, sendPasswordResetEmail } from "firebase/auth";
-import { app } from "./firebase"; // Ensure this path is correct for your Firebase config
-
-// Initialize Firebase Auth
-const auth = getAuth(app);
+import { sendPasswordResetEmail } from "firebase/auth"; // Keep needed auth imports
+import { auth } from "./firebase"; // Import initialized auth
 
 const ForgotPasswordScreen = () => {
   const router = useRouter();

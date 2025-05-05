@@ -1,4 +1,4 @@
-// c:\Users\scubo\OneDrive\Documents\FC_proj\FinClassify\FinClassifyApp\app\signup.tsx
+// c:\Users\scubo\OneDrive\Documents\putangina\fc\app\signup.tsx
 import React, { useState } from "react";
 import {
   View,
@@ -15,13 +15,9 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useRouter, Stack } from "expo-router";
-import { getAuth, createUserWithEmailAndPassword, User } from "firebase/auth"; // Import User type
-import { getFirestore, doc, setDoc, serverTimestamp } from "firebase/firestore"; // Firestore imports
-import { app } from "./firebase"; // Import your Firebase app instance
-
-// Initialize Firebase Auth & Firestore
-const auth = getAuth(app);
-const db = getFirestore(app); // Initialize Firestore here
+import { createUserWithEmailAndPassword, User } from "firebase/auth"; // Keep needed auth imports
+import { doc, setDoc, serverTimestamp } from "firebase/firestore"; // Keep needed firestore imports
+import { auth, db } from "./firebase"; // Import initialized auth and db
 
 const SignUpScreen = () => {
   const router = useRouter();

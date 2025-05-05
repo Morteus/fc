@@ -1,4 +1,4 @@
-// c:\Users\scubo\OneDrive\Documents\FC_proj\FinClassify\FinClassifyApp\app\transactions.tsx
+// c:\Users\scubo\OneDrive\Documents\putangina\fc\app\transactions.tsx
 import React, { useState, useEffect, useCallback } from "react"; // Import useCallback
 import {
   View,
@@ -19,7 +19,7 @@ import { Stack, useNavigation } from "expo-router";
 import AddIncomeCategoryModal from "../components/AddIncomeModal";
 import AddExpenseCategoryModal from "../components/AddExpenseModal";
 import {
-  getFirestore,
+  // getFirestore, // No longer needed here
   collection,
   addDoc,
   doc,
@@ -30,14 +30,11 @@ import {
   orderBy,
   Timestamp,
 } from "firebase/firestore";
-import { getAuth, onAuthStateChanged, User } from "firebase/auth"; // Import Firebase Auth
-import { app } from "../app/firebase";
+import { onAuthStateChanged, User } from "firebase/auth"; // Keep needed auth imports
+import { db, auth } from "../app/firebase"; // Import initialized db and auth
 // Import debounce (optional but recommended for better performance)
 // You might need to install lodash: npm install lodash @types/lodash
 // import { debounce } from 'lodash';
-
-const db = getFirestore(app);
-const auth = getAuth(app); // Initialize Firebase Auth
 
 // --- Interfaces ---
 interface Category {
@@ -276,7 +273,8 @@ const suggestCategory = (
 };
 // --- End Classification Function ---
 
-export default function TransactionScreen() {
+function TransactionScreen() {
+  // Changed from export default function
   const navigation = useNavigation();
   const [transactionType, setTransactionType] = useState<"Expenses" | "Income">(
     "Expenses"
@@ -322,11 +320,13 @@ export default function TransactionScreen() {
 
   // --- Fetch Categories from Firestore ---
   useEffect(() => {
+    if (!currentUser) return; // Don't fetch if no user
+
     // Fetch Income Categories
     const incomeCollectionRef = collection(
       db,
       "Accounts",
-      currentUser?.uid || "__nouser__", // Use optional chaining or placeholder
+      currentUser.uid, // Use actual user UID
       "Income"
     );
     const incomeQuery = query(incomeCollectionRef, orderBy("name"));
@@ -367,7 +367,7 @@ export default function TransactionScreen() {
     const expenseCollectionRef = collection(
       db,
       "Accounts",
-      currentUser?.uid || "__nouser__", // Use optional chaining or placeholder
+      currentUser.uid, // Use actual user UID
       "Expenses"
     );
     const expenseQuery = query(expenseCollectionRef, orderBy("name"));
@@ -522,23 +522,21 @@ export default function TransactionScreen() {
       Alert.alert("Invalid Amount", "Please enter a valid positive amount.");
       return;
     }
-    if (!selectedCategoryForAmount) {
-      // If a suggestion exists, use it. Otherwise, prompt user.
+    let categoryToSave = selectedCategoryForAmount; // Start with manually selected
+
+    // If no category was manually selected, check if there's a suggestion
+    if (!categoryToSave && suggestedCategoryId) {
       const suggested = currentCategories.find(
         (cat) => cat.id === suggestedCategoryId
       );
       if (suggested) {
-        setSelectedCategoryForAmount(suggested); // Use the suggestion
-        // Re-run save with the selected category (or structure differently)
-        // For simplicity here, we'll just proceed, but a better UX might confirm
-      } else {
-        Alert.alert("Category Required", "Please select a category.");
-        return;
+        categoryToSave = suggested; // Use the suggestion
       }
     }
-    // Re-check after potentially setting from suggestion
-    if (!selectedCategoryForAmount) {
-      Alert.alert("Error", "No category selected or suggested.");
+
+    // Final check: If still no category, prompt the user
+    if (!categoryToSave) {
+      Alert.alert("Category Required", "Please select or suggest a category.");
       return;
     }
 
@@ -552,8 +550,8 @@ export default function TransactionScreen() {
     // Account ID will be null if none is selected
     const newTransactionData = {
       type: transactionType,
-      categoryName: selectedCategoryForAmount.name,
-      categoryIcon: selectedCategoryForAmount.icon,
+      categoryName: categoryToSave.name, // Use categoryToSave
+      categoryIcon: categoryToSave.icon, // Use categoryToSave
       amount: transactionAmount,
       accountId: selectedAccountId,
       accountName: accountName,
@@ -602,9 +600,6 @@ export default function TransactionScreen() {
       }
       // --- Case 2: Account is NOT Selected - Add Transaction Only ---
       else {
-        const newTransactionRef = doc(
-          collection(db, "Accounts", userId, "transactions")
-        );
         // Directly add the transaction document without updating any account balance
         await addDoc(
           collection(db, "Accounts", userId, "transactions"),
@@ -643,6 +638,15 @@ export default function TransactionScreen() {
   const handleSaveHeader = () => {
     // This header button doesn't perform the save directly.
     // The save happens in the modal via handleSaveAmount.
+    // We could potentially trigger the modal save from here if needed,
+    // but the current flow seems fine.
+    // If the modal is open, maybe trigger its save?
+    if (isAmountModalVisible) {
+      handleSaveAmount();
+    } else {
+      // If modal isn't open, maybe prompt user to select category first?
+      Alert.alert("Select Category", "Please select a category first.");
+    }
   };
 
   // --- JSX ---
@@ -662,7 +666,7 @@ export default function TransactionScreen() {
           headerRight: () => (
             <TouchableOpacity
               style={styles.headerButton}
-              onPress={handleSaveHeader}
+              onPress={handleSaveHeader} // Use the new handler
             >
               <Text style={styles.headerButtonText}>Save</Text>
             </TouchableOpacity>
@@ -920,16 +924,14 @@ export default function TransactionScreen() {
                   style={[
                     styles.modalButton,
                     styles.saveButton,
-                    // Disable save if no user, loading, no accounts, or no category selected/suggested
-                    (isLoadingAccounts || // Still disable if accounts are loading (might select one)
-                      (!selectedCategoryForAmount && !suggestedCategoryId) || // Need a category
+                    // Disable save if no user, loading, or no category selected/suggested
+                    ((!selectedCategoryForAmount && !suggestedCategoryId) || // Need a category
                       !currentUser) &&
                       styles.saveButtonDisabled,
                   ]}
                   onPress={handleSaveAmount}
                   disabled={
                     !currentUser || // Disable if no user
-                    isLoadingAccounts || // Disable if accounts are loading
                     (!selectedCategoryForAmount && !suggestedCategoryId) // Disable if no category
                   }
                 >
@@ -1247,3 +1249,5 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
 });
+
+export default TransactionScreen; // Add the default export
