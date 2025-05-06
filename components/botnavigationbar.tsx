@@ -1,45 +1,82 @@
 // c:\Users\scubo\OneDrive\Documents\FC_proj\FinClassify\FinClassifyApp\components\botnavigationbar.tsx
-import React from "react";
-import { View, Text, StyleSheet } from "react-native"; // Removed TouchableOpacity
 import { Ionicons } from "@expo/vector-icons";
-import { Link } from "expo-router"; // Import Link
+import { Link, useFocusEffect } from "expo-router"; // Import Link and useFocusEffect
+import React, { useState } from "react";
+import { StyleSheet, Text, View } from "react-native";
 
 const BottomNavigationBar = () => {
+  const [disabled, setDisabled] = useState(true);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      // Set disabled to true when the BottomNavigationBar comes into focus
+      setDisabled(true);
+
+      // Simulate a loading period (replace with your actual loading logic)
+      const timeout = setTimeout(() => {
+        setDisabled(false);
+      }, 2000);
+
+      // Clear the timeout if the component unmounts or loses focus
+      return () => clearTimeout(timeout);
+    }, []) // Empty dependency array ensures this runs only when the component mounts/unmounts or gains/loses focus
+  );
+
   return (
     <View style={styles.container}>
-      {/* Link wraps NavItem, NO asChild */}
-      <Link href="../../record" style={styles.linkWrapper}>
-        <NavItem icon="reader-outline" label="Records" />
-      </Link>
-
-      <Link href="../../analysis" style={styles.linkWrapper}>
-        <NavItem icon="pie-chart-outline" label="Analysis" />
-      </Link>
-
-      <Link href="../../Budgets" style={styles.linkWrapper}>
-        <NavItem icon="calculator-outline" label="Budgets" />
-      </Link>
-
-      <Link href="../../Accounts" style={styles.linkWrapper}>
-        <NavItem icon="wallet-outline" label="Accounts" />
-      </Link>
+      <NavItem
+        icon="reader-outline"
+        label="Records"
+        href="/record"
+        disabled={disabled}
+      />
+      <NavItem
+        icon="pie-chart-outline"
+        label="Analysis"
+        href="/analysis"
+        disabled={disabled}
+      />
+      <NavItem
+        icon="calculator-outline"
+        label="Budgets"
+        href="/Budgets"
+        disabled={disabled}
+      />
+      <NavItem
+        icon="wallet-outline"
+        label="Accounts"
+        href="/Accounts"
+        disabled={disabled}
+      />
     </View>
   );
 };
 
-// --- NavItem Component ---
-// Simplified: It no longer needs onPress or accessibilityRole from Link
-const NavItem: React.FC<{
+// NavItem Component with Link and disabled state
+const NavItem = ({
+  icon,
+  label,
+  href,
+  disabled,
+}: {
   icon: React.ComponentProps<typeof Ionicons>["name"];
   label: string;
-}> = ({ icon, label }) => {
+  href: `/record` | `/analysis` | `/Budgets` | `/Accounts`; // Explicitly define possible paths
+  disabled: boolean;
+}) => {
   return (
-    // This View is just for layout/styling now
-    // The press handling is done by the parent Link
-    <View style={styles.navItemContent}>
-      <Ionicons name={icon} size={25} color="#2E8B57" />
-      <Text style={styles.navLabel}>{label}</Text>
-    </View>
+    <Link
+      href={href}
+      style={styles.linkWrapper}
+      {...(disabled && { onPress: () => null, disabled: true })}
+    >
+      <View style={[styles.navItemContent, disabled && styles.disabledItem]}>
+        <Ionicons name={icon} size={25} color={disabled ? "#ccc" : "#2E8B57"} />
+        <Text style={[styles.navLabel, disabled && styles.disabledLabel]}>
+          {label}
+        </Text>
+      </View>
+    </Link>
   );
 };
 
@@ -68,6 +105,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#2E8B57",
     marginTop: 4, // Slightly reduced margin
+  },
+  disabledItem: {
+    opacity: 0.5,
+  },
+  disabledLabel: {
+    color: "#ccc",
   },
 });
 
