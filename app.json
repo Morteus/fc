@@ -42,8 +42,14 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "b23cec51-81c9-4766-961a-0ba1f44613f5"
+        "projectId": "e6e313e9-214e-49e9-82b8-771903878cc7"
+      },
+      "expo": {
+        "reactNativeDirectoryCheck": {
+          "listUnknownPackages": false
+        }
       }
-    }
+    },
+    "owner": "finclass2"
   }
 }
