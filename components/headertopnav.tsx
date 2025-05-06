@@ -1,36 +1,36 @@
 // c:\Users\scubo\Downloads\FinClassify-dea0c4be4da0318ed62b8b3aa713817c40b0002f\FinClassifyApp\components\headertopnav.tsx
-import React, { useState, useEffect } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import { getAuth, onAuthStateChanged, User } from "firebase/auth";
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Modal, // Keep Modal for pickers
+  collection,
+  getFirestore,
+  onSnapshot,
+  query,
+  Timestamp,
+  where,
+} from "firebase/firestore";
+import { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
   Dimensions,
   FlatList,
+  Modal,
   Platform,
-  ActivityIndicator,
-  TouchableWithoutFeedback, // <-- Add TouchableWithoutFeedback
-  Alert, // Added for ProfilePage
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import {
-  getFirestore,
-  collection,
-  query,
-  where,
-  onSnapshot,
-  Timestamp,
-} from "firebase/firestore";
-import { getAuth, onAuthStateChanged, User } from "firebase/auth";
+import { useDateContext } from "../app/context/DateContext";
 import { app } from "../app/firebase";
-import { useDateContext } from "../app/context/DateContext"; // Import the context hook
-import { useRouter } from "expo-router";
-import { formatCurrency } from "../utils/formatting"; // <-- Import shared function
+import { formatCurrency } from "../utils/formatting";
 
 const { width, height } = Dimensions.get("window");
 const db = getFirestore(app);
-const auth = getAuth(app); // Initialize Firebase Auth
+const auth = getAuth(app);
 
 // --- Interfaces ---
 interface AccountForIncome {
@@ -40,8 +40,6 @@ interface AccountForIncome {
 }
 
 // --- Helper Functions ---
-// formatCurrency moved to utils/formatting.ts
-
 const getMonthNumber = (monthName: string): number => {
   const months = [
     "Jan",
@@ -59,7 +57,6 @@ const getMonthNumber = (monthName: string): number => {
   ];
   return months.indexOf(monthName);
 };
-// --- End Helper Functions ---
 
 type TimeFilter = "Daily" | "Weekly" | "Monthly";
 
@@ -72,7 +69,7 @@ const Header = () => {
     selectedFilter,
     setSelectedFilter,
     selectedDateString,
-    selectedCurrency, // Get currency from context
+    selectedCurrency,
   } = useDateContext();
 
   const currentYear = new Date().getFullYear();
@@ -91,7 +88,7 @@ const Header = () => {
     "Dec",
   ];
 
-  // Local state for UI control (pickers)
+  // Local state for UI control
   const [showYearPicker, setShowYearPicker] = useState(false);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
@@ -107,7 +104,7 @@ const Header = () => {
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
 
   const years = Array.from({ length: 10 }, (_, i) => currentYear - 5 + i);
-  const router = useRouter(); // Get router instance
+  const router = useRouter();
 
   // --- Listen for Auth State Changes ---
   useEffect(() => {
@@ -125,7 +122,7 @@ const Header = () => {
       }
     });
     return () => unsubscribeAuth();
-  }, []); // Removed isProfileModalVisible dependency
+  }, []);
 
   // --- Fetch Accounts ---
   useEffect(() => {
@@ -134,6 +131,7 @@ const Header = () => {
       setAccountIncomeData([]);
       return;
     }
+
     setIsLoadingAccounts(true);
     const accountsCollectionRef = collection(
       db,
@@ -141,6 +139,7 @@ const Header = () => {
       currentUser.uid,
       "accounts"
     );
+
     const q = query(accountsCollectionRef);
     const unsubscribeAccounts = onSnapshot(
       q,
@@ -170,6 +169,7 @@ const Header = () => {
         setIsLoadingAccounts(false);
       }
     );
+
     return () => {
       console.log(
         `HeaderTopNav: Unsubscribing from accounts listener for ${currentUser?.uid}`
@@ -184,6 +184,7 @@ const Header = () => {
       setIsLoadingTotals(true);
       return;
     }
+
     setIsLoadingTotals(true);
     setErrorTotals(null);
     setTotalIncome(0);
@@ -195,17 +196,19 @@ const Header = () => {
       setIsLoadingTotals(false);
       return;
     }
+
     const monthNumber = getMonthNumber(selectedMonth);
     if (monthNumber < 0 && selectedFilter === "Monthly") {
-      // Only validate month if filter is Monthly
       setErrorTotals("Invalid month selected.");
       setIsLoadingTotals(false);
       return;
     }
 
+    // Calculate date range based on filter
     let startDate: Date;
     let endDate: Date;
     const now = new Date();
+
     if (selectedFilter === "Daily") {
       startDate = new Date(
         now.getFullYear(),
@@ -240,14 +243,17 @@ const Header = () => {
       startDate = new Date(selectedYear, monthNumber, 1, 0, 0, 0);
       endDate = new Date(selectedYear, monthNumber + 1, 1, 0, 0, 0);
     }
+
     const startTimestamp = Timestamp.fromDate(startDate);
     const endTimestamp = Timestamp.fromDate(endDate);
 
+    // Calculate estimated recurring income
     let estimatedRecurringIncome = 0;
     const daysInFilterPeriod =
       (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
     const approxDaysInMonth = 365.25 / 12;
     const approxDaysInWeek = 7;
+
     accountIncomeData.forEach((account) => {
       const income = account.incomeAmount;
       const freq = account.incomeFrequency;
@@ -268,22 +274,26 @@ const Header = () => {
       }
     });
 
+    // Fetch transactions
     const transactionsCollectionRef = collection(
       db,
       "Accounts",
       currentUser.uid,
       "transactions"
     );
+
     const q = query(
       transactionsCollectionRef,
       where("timestamp", ">=", startTimestamp),
       where("timestamp", "<", endTimestamp)
     );
+
     const unsubscribeTransactions = onSnapshot(
       q,
       (querySnapshot) => {
         let incomeFromTransactions = 0;
         let expensesFromTransactions = 0;
+
         querySnapshot.forEach((doc) => {
           const data = doc.data();
           if (data && typeof data.amount === "number" && data.type) {
@@ -292,6 +302,7 @@ const Header = () => {
               expensesFromTransactions += data.amount;
           }
         });
+
         const combinedTotalIncome =
           estimatedRecurringIncome + incomeFromTransactions;
         setTotalIncome(combinedTotalIncome);
@@ -308,6 +319,7 @@ const Header = () => {
         setIsLoadingTotals(false);
       }
     );
+
     return () => {
       console.log(
         `HeaderTopNav: Unsubscribing from transaction totals listener for ${currentUser?.uid}`
@@ -325,15 +337,18 @@ const Header = () => {
 
   // --- Date Picker Logic ---
   const showDatePicker = () => setShowYearPicker(true);
+
   const hideDatePicker = () => {
     setShowYearPicker(false);
     setShowMonthPicker(false);
   };
+
   const handleYearSelect = (year: number) => {
     setSelectedYear(year);
     setShowYearPicker(false);
     setShowMonthPicker(true);
   };
+
   const handleMonthSelect = (month: string) => {
     setSelectedMonth(month);
     setShowMonthPicker(false);
@@ -361,6 +376,7 @@ const Header = () => {
         />
       );
     }
+
     if (errorTotals && !isLoadingTotals) {
       const errorLines = errorTotals.split("\n").map((line, index) => (
         <Text key={index} style={styles.errorText} numberOfLines={1}>
@@ -369,34 +385,44 @@ const Header = () => {
       ));
       return <View style={styles.errorContainer}>{errorLines}</View>;
     }
+
     return (
       <View style={styles.categoryItemContent}>
-        {" "}
-        {/* Wrap in a View */}
-        <Text
-          style={styles.categoryAmount}
-          numberOfLines={1}
-          ellipsizeMode="tail"
-        >
-          {formatCurrency(totalExpenses, selectedCurrency)}{" "}
-          {/* Pass selectedCurrency */}
-        </Text>
-        <Text
-          style={styles.categoryAmount}
-          numberOfLines={1}
-          ellipsizeMode="tail"
-        >
-          {formatCurrency(totalIncome, selectedCurrency)}{" "}
-          {/* Pass selectedCurrency */}
-        </Text>
-        <Text
-          style={styles.categoryAmount}
-          numberOfLines={1}
-          ellipsizeMode="tail"
-        >
-          {formatCurrency(netTotal, selectedCurrency)}{" "}
-          {/* Pass selectedCurrency */}
-        </Text>
+        <View style={styles.totalCard}>
+          <Text style={styles.categoryLabel}>Expenses</Text>
+          <Text
+            style={[styles.categoryAmount, styles.expenseAmount]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {formatCurrency(totalExpenses, selectedCurrency)}
+          </Text>
+        </View>
+
+        <View style={styles.totalCard}>
+          <Text style={styles.categoryLabel}>Income</Text>
+          <Text
+            style={[styles.categoryAmount, styles.incomeAmount]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {formatCurrency(totalIncome, selectedCurrency)}
+          </Text>
+        </View>
+
+        <View style={styles.totalCard}>
+          <Text style={styles.categoryLabel}>Balance</Text>
+          <Text
+            style={[
+              styles.categoryAmount,
+              netTotal >= 0 ? styles.incomeAmount : styles.expenseAmount,
+            ]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {formatCurrency(netTotal, selectedCurrency)}
+          </Text>
+        </View>
       </View>
     );
   };
@@ -404,6 +430,8 @@ const Header = () => {
   // --- JSX ---
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#006400" />
+
       {/* Header Content */}
       <View style={styles.headerWrapper}>
         {/* Top Row */}
@@ -411,39 +439,49 @@ const Header = () => {
           {/* Menu Icon navigates to Profile Screen */}
           <TouchableOpacity
             style={styles.iconContainer}
-            onPress={navigateToProfile} // <-- Updated onPress
+            onPress={navigateToProfile}
+            activeOpacity={0.7}
           >
             <Ionicons name="menu-outline" size={24} color="white" />
           </TouchableOpacity>
+
           <View style={styles.titleContainer}>
             <Text style={styles.title}>FinClassify</Text>
           </View>
+
           <View style={styles.rightIconsContainer}>
-            {/* Moved Filter Icon Here */}
-            <TouchableOpacity onPress={() => setIsFilterModalVisible(true)}>
+            <TouchableOpacity
+              onPress={() => setIsFilterModalVisible(true)}
+              activeOpacity={0.7}
+              style={styles.filterButton}
+            >
               <Ionicons name="options-outline" size={22} color="white" />
             </TouchableOpacity>
           </View>
         </View>
+
         {/* Middle Row */}
         <View style={styles.headerBottom}>
           <View style={styles.dateAndFilterContainer}>
-            {/* Month/Year Picker (Always Visible, Disabled if not Monthly) */}
+            {/* Month/Year Picker */}
             <View style={styles.dateContainer}>
               <TouchableOpacity
-                style={styles.dateSelector}
+                style={[
+                  styles.dateSelector,
+                  selectedFilter !== "Monthly" && styles.dateSelectorDisabled,
+                ]}
                 onPress={showDatePicker}
-                disabled={selectedFilter !== "Monthly"} // Disable if not Monthly filter
+                disabled={selectedFilter !== "Monthly"}
+                activeOpacity={0.7}
               >
                 <Text
                   style={[
                     styles.dateText,
-                    selectedFilter !== "Monthly" && styles.dateTextDisabled, // Style when disabled
+                    selectedFilter !== "Monthly" && styles.dateTextDisabled,
                   ]}
                 >
-                  {selectedDateString} {/* Always show Month/Year */}
+                  {selectedDateString}
                 </Text>
-                {/* Only show chevron if Monthly filter is active */}
                 {selectedFilter === "Monthly" && (
                   <Ionicons
                     name="chevron-down-outline"
@@ -453,66 +491,60 @@ const Header = () => {
                 )}
               </TouchableOpacity>
             </View>
-            {/* Filter Type Display (Not Clickable) */}
+
+            {/* Filter Type Display */}
             <View style={styles.filterTypeDisplay}>
               <Text style={styles.filterTypeText}>{selectedFilter}</Text>
             </View>
           </View>
         </View>
-        {/* Bottom Row */}
-        <View style={styles.dataContainer}>
-          <View style={styles.categoryHeader}>
-            <Text style={styles.categoryHeaderText}>Expenses</Text>
-            <Text style={styles.categoryHeaderText}>Income</Text>
-            <Text style={styles.categoryHeaderText}>Total</Text>
-          </View>
-          <View style={styles.categoryItem}>{renderTotals()}</View>
-        </View>
-      </View>
 
-      {/* --- Removed Profile Modal --- */}
+        {/* Bottom Row - Summary Cards */}
+        <View style={styles.dataContainer}>{renderTotals()}</View>
+      </View>
 
       {/* Year Picker Modal */}
       {showYearPicker && (
         <Modal transparent animationType="fade" onRequestClose={hideDatePicker}>
           <TouchableWithoutFeedback onPress={hideDatePicker}>
             <View style={styles.pickerModalContainer}>
-              <View
-                style={styles.pickerContent}
-                onStartShouldSetResponder={() => true}
-              >
-                <Text style={styles.pickerTitle}>Select Year</Text>
-                <FlatList
-                  data={years.map(String)}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      style={[
-                        styles.pickerItem,
-                        selectedYear === parseInt(item, 10) &&
-                          styles.pickerItemSelected,
-                      ]}
-                      onPress={() => handleYearSelect(parseInt(item, 10))}
-                    >
-                      <Text
+              <TouchableWithoutFeedback>
+                <View style={styles.pickerContent}>
+                  <Text style={styles.pickerTitle}>Select Year</Text>
+                  <FlatList
+                    data={years.map(String)}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
                         style={[
-                          styles.pickerText,
+                          styles.pickerItem,
                           selectedYear === parseInt(item, 10) &&
-                            styles.pickerTextSelected,
+                            styles.pickerItemSelected,
                         ]}
+                        onPress={() => handleYearSelect(parseInt(item, 10))}
+                        activeOpacity={0.7}
                       >
-                        {item}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                  keyExtractor={(item) => item}
-                />
-                <TouchableOpacity
-                  style={styles.pickerButton}
-                  onPress={hideDatePicker}
-                >
-                  <Text style={styles.pickerButtonText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
+                        <Text
+                          style={[
+                            styles.pickerText,
+                            selectedYear === parseInt(item, 10) &&
+                              styles.pickerTextSelected,
+                          ]}
+                        >
+                          {item}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                    keyExtractor={(item) => item}
+                  />
+                  <TouchableOpacity
+                    style={styles.pickerButton}
+                    onPress={hideDatePicker}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.pickerButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableWithoutFeedback>
             </View>
           </TouchableWithoutFeedback>
         </Modal>
@@ -523,40 +555,41 @@ const Header = () => {
         <Modal transparent animationType="fade" onRequestClose={hideDatePicker}>
           <TouchableWithoutFeedback onPress={hideDatePicker}>
             <View style={styles.pickerModalContainer}>
-              <View
-                style={styles.pickerContent}
-                onStartShouldSetResponder={() => true}
-              >
-                <Text style={styles.pickerTitle}>Select Month</Text>
-                <FlatList
-                  data={monthsArray}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      style={[
-                        styles.pickerItem,
-                        selectedMonth === item && styles.pickerItemSelected,
-                      ]}
-                      onPress={() => handleMonthSelect(item)}
-                    >
-                      <Text
+              <TouchableWithoutFeedback>
+                <View style={styles.pickerContent}>
+                  <Text style={styles.pickerTitle}>Select Month</Text>
+                  <FlatList
+                    data={monthsArray}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
                         style={[
-                          styles.pickerText,
-                          selectedMonth === item && styles.pickerTextSelected,
+                          styles.pickerItem,
+                          selectedMonth === item && styles.pickerItemSelected,
                         ]}
+                        onPress={() => handleMonthSelect(item)}
+                        activeOpacity={0.7}
                       >
-                        {item}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                  keyExtractor={(item) => item}
-                />
-                <TouchableOpacity
-                  style={styles.pickerButton}
-                  onPress={hideDatePicker}
-                >
-                  <Text style={styles.pickerButtonText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
+                        <Text
+                          style={[
+                            styles.pickerText,
+                            selectedMonth === item && styles.pickerTextSelected,
+                          ]}
+                        >
+                          {item}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                    keyExtractor={(item) => item}
+                  />
+                  <TouchableOpacity
+                    style={styles.pickerButton}
+                    onPress={hideDatePicker}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.pickerButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableWithoutFeedback>
             </View>
           </TouchableWithoutFeedback>
         </Modal>
@@ -573,173 +606,199 @@ const Header = () => {
             onPress={() => setIsFilterModalVisible(false)}
           >
             <View style={styles.pickerModalContainer}>
-              <View
-                style={styles.pickerContent}
-                onStartShouldSetResponder={() => true}
-              >
-                <Text style={styles.pickerTitle}>Select Time Filter</Text>
-                {(["Daily", "Weekly", "Monthly"] as TimeFilter[]).map(
-                  (filter) => (
-                    <TouchableOpacity
-                      key={filter}
-                      style={[
-                        styles.pickerItem,
-                        selectedFilter === filter && styles.pickerItemSelected,
-                      ]}
-                      onPress={() => handleFilterSelect(filter)}
-                    >
-                      <Text
+              <TouchableWithoutFeedback>
+                <View style={styles.pickerContent}>
+                  <Text style={styles.pickerTitle}>Select Time Filter</Text>
+                  {(["Daily", "Weekly", "Monthly"] as TimeFilter[]).map(
+                    (filter) => (
+                      <TouchableOpacity
+                        key={filter}
                         style={[
-                          styles.pickerText,
+                          styles.pickerItem,
                           selectedFilter === filter &&
-                            styles.pickerTextSelected,
+                            styles.pickerItemSelected,
                         ]}
+                        onPress={() => handleFilterSelect(filter)}
+                        activeOpacity={0.7}
                       >
-                        {filter}
-                      </Text>
-                    </TouchableOpacity>
-                  )
-                )}
-                <TouchableOpacity
-                  style={styles.pickerButton}
-                  onPress={() => setIsFilterModalVisible(false)}
-                >
-                  <Text style={styles.pickerButtonText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
+                        <Text
+                          style={[
+                            styles.pickerText,
+                            selectedFilter === filter &&
+                              styles.pickerTextSelected,
+                          ]}
+                        >
+                          {filter}
+                        </Text>
+                      </TouchableOpacity>
+                    )
+                  )}
+                  <TouchableOpacity
+                    style={styles.pickerButton}
+                    onPress={() => setIsFilterModalVisible(false)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.pickerButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableWithoutFeedback>
             </View>
           </TouchableWithoutFeedback>
         </Modal>
       )}
-      {/* --- Removed Currency Modal --- */}
     </View>
   );
 };
 
 // --- Styles ---
 const styles = StyleSheet.create({
-  // --- Header Styles ---
   container: {
     backgroundColor: "#006400",
-    paddingHorizontal: 8,
-    paddingBottom: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
     ...Platform.select({
-      ios: { paddingTop: 40 },
-      android: { paddingTop: 10 },
+      ios: { paddingTop: 50 },
+      android: { paddingTop: 16 },
     }),
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
   },
-  headerWrapper: {},
+  headerWrapper: {
+    width: "100%",
+  },
   headerTop: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     width: "100%",
-    marginBottom: 5,
+    marginBottom: 12,
   },
-  headerBottom: { flexDirection: "row", alignItems: "center", width: "100%" },
+  headerBottom: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: "100%",
+    marginBottom: 16,
+  },
   titleContainer: {
     position: "absolute",
     left: 0,
     right: 0,
     alignItems: "center",
   },
-  iconContainer: { padding: 4, zIndex: 2 },
-  title: { color: "white", fontSize: 18, fontWeight: "bold" },
-  dateContainer: { alignItems: "flex-start" },
+  iconContainer: {
+    padding: 8,
+    zIndex: 2,
+    borderRadius: 20,
+  },
+  title: {
+    color: "white",
+    fontSize: 20,
+    fontWeight: "bold",
+    letterSpacing: 0.5,
+  },
+  dateContainer: {
+    alignItems: "flex-start",
+  },
   dateSelector: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 4,
-    paddingHorizontal: 6,
-    borderRadius: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+  },
+  dateSelectorDisabled: {
     backgroundColor: "rgba(255, 255, 255, 0.1)",
   },
-  dateText: { color: "white", marginRight: 4, fontSize: 14, fontWeight: "500" },
-  dateTextDisabled: { color: "#cccccc" },
+  dateText: {
+    color: "white",
+    marginRight: 6,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  dateTextDisabled: {
+    color: "rgba(255, 255, 255, 0.6)",
+  },
   dateAndFilterContainer: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     width: "100%",
-    paddingHorizontal: 5, // Add some horizontal padding
   },
   filterTypeDisplay: {
-    // Style for the D/W/M display text container
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 4,
-    // Removed background color, adjust as needed
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
   },
   filterTypeText: {
     color: "white",
-    marginRight: 4,
     fontSize: 14,
-    fontWeight: "500",
+    fontWeight: "600",
   },
-
+  filterButton: {
+    padding: 8,
+    borderRadius: 20,
+  },
   dataContainer: {
-    marginTop: 10,
     width: "100%",
-    backgroundColor: "rgba(0, 0, 0, 0.1)",
-    borderRadius: 6,
-    paddingVertical: 8,
-    minHeight: 50,
-    justifyContent: "center",
+    borderRadius: 12,
+    overflow: "hidden",
   },
-  categoryHeader: {
+  categoryItemContent: {
     flexDirection: "row",
-    justifyContent: "space-around",
+    justifyContent: "space-between",
+    alignItems: "stretch",
     width: "100%",
-    paddingHorizontal: 10,
+    gap: 8,
+  },
+  totalCard: {
+    flex: 1,
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    borderRadius: 10,
+    padding: 12,
+    alignItems: "center",
+  },
+  categoryLabel: {
+    color: "rgba(255, 255, 255, 0.9)",
+    fontSize: 12,
+    fontWeight: "600",
     marginBottom: 4,
   },
-  categoryHeaderText: {
-    color: "rgba(255, 255, 255, 0.8)",
-    fontSize: 11,
-    fontWeight: "600",
-    textAlign: "center",
-    flex: 1,
-  },
-  categoryItem: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    width: "100%",
-    paddingHorizontal: 10,
-    alignItems: "center",
-  },
   categoryAmount: {
-    color: "white",
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: "bold",
     textAlign: "center",
-    flex: 1,
-    paddingHorizontal: 2,
   },
-  totalsLoader: { marginVertical: 5 },
-  categoryItemContent: {
-    // Style for the new wrapper inside categoryItem
-    flexDirection: "row",
-    justifyContent: "space-around",
-    width: "100%",
-    alignItems: "center",
+  incomeAmount: {
+    color: "#8AFF8A",
+  },
+  expenseAmount: {
+    color: "#FF8A8A",
+  },
+  totalsLoader: {
+    marginVertical: 20,
+    alignSelf: "center",
   },
   errorContainer: {
-    flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 5,
+    paddingVertical: 20,
   },
-  errorText: { color: "#ffdddd", fontSize: 11, textAlign: "center" },
+  errorText: {
+    color: "#ffdddd",
+    fontSize: 14,
+    textAlign: "center",
+    marginVertical: 4,
+  },
   rightIconsContainer: {
     flexDirection: "row",
     alignItems: "center",
     zIndex: 2,
   },
-  // Removed searchIcon and volumeSliderIcon styles as they are implicitly handled or not needed
-
-  // --- Picker Modal Styles ---
   pickerModalContainer: {
     flex: 1,
     justifyContent: "center",
@@ -749,40 +808,52 @@ const styles = StyleSheet.create({
   pickerContent: {
     backgroundColor: "white",
     padding: 20,
-    borderRadius: 10,
-    width: width * 0.8,
-    maxHeight: height * 0.6,
+    borderRadius: 16,
+    width: width * 0.85,
+    maxHeight: height * 0.7,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   pickerTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "bold",
-    marginBottom: 15,
+    marginBottom: 16,
     textAlign: "center",
     color: "#333",
   },
   pickerItem: {
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderBottomWidth: 1,
     borderColor: "#eee",
     alignItems: "center",
   },
-  pickerItemSelected: { backgroundColor: "#e0f2e0" },
-  pickerText: { fontSize: 16, color: "#006400" },
-  pickerTextSelected: { fontWeight: "bold" },
+  pickerItemSelected: {
+    backgroundColor: "#f0f8f0",
+  },
+  pickerText: {
+    fontSize: 16,
+    color: "#444",
+  },
+  pickerTextSelected: {
+    fontWeight: "bold",
+    color: "#B58900",
+  },
   pickerButton: {
     marginTop: 20,
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 20,
-    backgroundColor: "#e0e0e0",
-    borderRadius: 8,
+    backgroundColor: "#f0f0f0",
+    borderRadius: 10,
     alignSelf: "center",
   },
-  pickerButtonText: { fontSize: 16, color: "#555", fontWeight: "500" },
+  pickerButtonText: {
+    fontSize: 16,
+    color: "#444",
+    fontWeight: "600",
+  },
 });
 
 export default Header;

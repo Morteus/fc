@@ -1,34 +1,32 @@
 // c:\Users\scubo\OneDrive\Documents\putangina\fc\app\analysis.tsx
-import React, { useState, useEffect, useMemo } from "react";
+import BottomNavigationBar from "@/components/botnavigationbar";
+import HeaderTopNav from "@/components/headertopnav";
+import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import { getAuth, onAuthStateChanged, User } from "firebase/auth"; // Import getAuth
 import {
-  View,
-  Alert,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
+  collection,
+  getFirestore,
+  onSnapshot,
+  orderBy,
+  query,
+  Timestamp,
+  where,
+} from "firebase/firestore";
+import { useEffect, useMemo, useState } from "react";
+import {
   ActivityIndicator,
   FlatList,
-  // Platform removed
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context"; // Import SafeAreaView
-import HeaderTopNav from "@/components/headertopnav";
-import BottomNavigationBar from "@/components/botnavigationbar";
-import { useNavigation } from "@react-navigation/native";
-import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
-import {
-  getFirestore,
-  collection,
-  query,
-  where,
-  orderBy,
-  Timestamp,
-  onSnapshot,
-} from "firebase/firestore";
-import { onAuthStateChanged, User, getAuth } from "firebase/auth"; // Import getAuth
 import { app } from "../app/firebase";
-import { useDateContext } from "./context/DateContext";
-import { formatCurrency } from "../utils/formatting";
 import SummaryModal from "../components/SummaryModal"; // Import the new modal
+import { formatCurrency } from "../utils/formatting";
+import { useDateContext } from "./context/DateContext";
 
 const db = getFirestore(app);
 const auth = getAuth(app);

@@ -1,25 +1,24 @@
-// c:\Users\scubo\OneDrive\Documents\putangina\fc\app\index.tsx
-import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  Image,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  TouchableWithoutFeedback,
-  Keyboard,
-  ActivityIndicator,
-} from "react-native";
-import { useRouter, Stack } from "expo-router"; // Import Stack for header config
+import { Ionicons } from "@expo/vector-icons";
+import { Stack, useRouter } from "expo-router"; // Import Stack for header config
+import { StatusBar } from "expo-status-bar";
 import {
   // getAuth, // No longer needed here
   signInWithEmailAndPassword, // Only need Sign In for this screen
 } from "firebase/auth";
+import { useState } from "react";
+import {
+  ActivityIndicator,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
+} from "react-native";
 
 import { auth } from "./firebase"; // <-- Import initialized auth instance
 
@@ -29,6 +28,7 @@ const LoginScreen = () => {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null); // State for inline errors
+  const [showPassword, setShowPassword] = useState(false);
 
   // --- Email/Password Login Handler ---
   const handleLogin = () => {
@@ -84,12 +84,17 @@ const LoginScreen = () => {
       .finally(() => setIsLoading(false));
   };
 
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
+  };
+
   // --- Render UI ---
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={styles.keyboardAvoidingContainer}
     >
+      <StatusBar style="dark" />
       {/* Hide the header for the login screen */}
       <Stack.Screen options={{ headerShown: false }} />
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -98,51 +103,85 @@ const LoginScreen = () => {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.innerContainer}>
+            {/* Logo Placeholder */}
+            <View style={styles.logoContainer}>
+              <View style={styles.logoPlaceholder}>
+                <Text style={styles.logoText}>FC</Text>
+              </View>
+            </View>
+
             {/* Title and Subtitle */}
-            <Text style={styles.title}>Login here</Text>
+            <Text style={styles.title}>Welcome Back</Text>
             <Text style={styles.subtitle}>
-              Welcome back, you've been missed!
+              Sign in to continue your financial journey
             </Text>
 
             {/* Display Error Message */}
             {error && <Text style={styles.errorText}>{error}</Text>}
 
-            {/* --- Email/Password Inputs --- */}
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              keyboardType="email-address" // Keep keyboardType
-              placeholderTextColor="#888"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              autoComplete="email"
-              editable={!isLoading}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              secureTextEntry
-              placeholderTextColor="#777" // Darken placeholder slightly
-              value={password}
-              onChangeText={setPassword}
-              autoComplete="password"
-              editable={!isLoading}
-            />
+            {/* Form Container */}
+            <View style={styles.formContainer}>
+              {/* Email Input */}
+              <View style={styles.inputContainer}>
+                <View style={styles.iconContainer}>
+                  <Ionicons name="mail-outline" size={20} color="#555" />
+                </View>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Email"
+                  keyboardType="email-address"
+                  placeholderTextColor="#888"
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  editable={!isLoading}
+                />
+              </View>
 
-            {/* Forgot Password Link */}
-            <TouchableOpacity
-              style={styles.forgotPasswordContainer} // Added container for better touch area
-              onPress={() => router.push("/forgotpassword")} // Use correct route name
-              disabled={isLoading}
-            >
-              <Text style={styles.forgotPasswordText}>
-                Forgot your password?
-              </Text>
-            </TouchableOpacity>
+              {/* Password Input */}
+              <View style={styles.inputContainer}>
+                <View style={styles.iconContainer}>
+                  <Ionicons name="lock-closed-outline" size={20} color="#555" />
+                </View>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Password"
+                  secureTextEntry={!showPassword}
+                  placeholderTextColor="#777"
+                  value={password}
+                  onChangeText={setPassword}
+                  autoComplete="password"
+                  editable={!isLoading}
+                />
+                <TouchableOpacity
+                  style={styles.eyeIcon}
+                  onPress={togglePasswordVisibility}
+                >
+                  <Ionicons
+                    name={showPassword ? "eye-off-outline" : "eye-outline"}
+                    size={22}
+                    color="#555"
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {/* Forgot Password Link */}
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={styles.forgotPasswordContainer}
+                onPress={() => router.push("/forgotpassword")}
+                disabled={isLoading}
+              >
+                <Text style={styles.forgotPasswordText}>
+                  Forgot your password?
+                </Text>
+              </TouchableOpacity>
+            </View>
 
             {/* --- Sign In Button --- */}
             <TouchableOpacity
+              activeOpacity={0.8}
               style={[styles.button, isLoading && styles.buttonDisabled]}
               onPress={handleLogin}
               disabled={isLoading}
@@ -155,13 +194,16 @@ const LoginScreen = () => {
             </TouchableOpacity>
 
             {/* --- Navigate to Sign Up Link --- */}
-            <TouchableOpacity
-              onPress={() => router.push("/signup")}
-              disabled={isLoading}
-              style={styles.signUpLink} // Added style for spacing
-            >
-              <Text style={styles.toggleText}>Create new account</Text>
-            </TouchableOpacity>
+            <View style={styles.signUpContainer}>
+              <Text style={styles.signUpText}>Don&apos;t have an account?</Text>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => router.push("/signup")}
+                disabled={isLoading}
+              >
+                <Text style={styles.signUpLink}> Create one</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </ScrollView>
       </TouchableWithoutFeedback>
@@ -179,51 +221,89 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingVertical: 20,
+    paddingVertical: 40,
   },
   innerContainer: {
-    width: "90%",
+    width: "88%",
     maxWidth: 400,
     alignItems: "center",
-    paddingVertical: 30,
+  },
+  logoContainer: {
+    marginBottom: 30,
+    alignItems: "center",
+  },
+  logoPlaceholder: {
+    width: 80,
+    height: 80,
+    borderRadius: 20,
+    backgroundColor: "#B58900",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  logoText: {
+    fontSize: 32,
+    fontWeight: "bold",
+    color: "#FFF",
   },
   title: {
     fontSize: 28,
     fontWeight: "bold",
-    color: "#B58900",
-    marginBottom: 8,
+    color: "#333",
+    marginBottom: 12,
     textAlign: "center",
   },
   subtitle: {
     fontSize: 16,
     textAlign: "center",
-    color: "#555",
+    color: "#666",
     marginBottom: 30,
     lineHeight: 22,
+    paddingHorizontal: 20,
   },
   errorText: {
-    color: "red",
-    marginBottom: 15,
+    color: "#E53935",
+    marginBottom: 20,
     fontSize: 14,
     textAlign: "center",
     fontWeight: "500",
+    paddingHorizontal: 10,
+  },
+  formContainer: {
+    width: "100%",
+    marginBottom: 16,
+  },
+  inputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: "100%",
+    height: 56,
+    borderWidth: 1.2,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderColor: "#E0E0E0",
+    backgroundColor: "#F9F9F9",
+  },
+  iconContainer: {
+    paddingHorizontal: 12,
+    justifyContent: "center",
+    alignItems: "center",
   },
   input: {
-    width: "100%",
-    height: 50,
-    paddingHorizontal: 15,
-    borderWidth: 1,
-    borderRadius: 8,
-    marginBottom: 15,
-    borderColor: "#aaa", // Darken border slightly
-    backgroundColor: "#fdfdfd",
+    flex: 1,
+    height: "100%",
     fontSize: 16,
     color: "#333",
+    paddingRight: 12,
+  },
+  eyeIcon: {
+    padding: 12,
+    justifyContent: "center",
+    alignItems: "center",
   },
   forgotPasswordContainer: {
-    alignSelf: "flex-end", // Position to the right
-    marginBottom: 20,
-    paddingVertical: 5, // Increase touch area vertically
+    alignSelf: "flex-end",
+    marginTop: 4,
+    paddingVertical: 5,
   },
   forgotPasswordText: {
     color: "#006400",
@@ -232,18 +312,19 @@ const styles = StyleSheet.create({
   },
   button: {
     backgroundColor: "#B58900",
-    paddingVertical: 15,
-    borderRadius: 8,
+    paddingVertical: 16,
+    borderRadius: 12,
     width: "100%",
     alignItems: "center",
+    justifyContent: "center",
     shadowColor: "#B58900",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 6,
     elevation: 5,
-    marginBottom: 15,
-    minHeight: 50,
-    justifyContent: "center",
+    marginTop: 10,
+    marginBottom: 20,
+    minHeight: 56,
   },
   buttonDisabled: {
     backgroundColor: "#CFAA70",
@@ -256,43 +337,16 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     fontSize: 16,
   },
-  orContinueText: {
-    marginTop: 20, // Adjusted margin
-    fontSize: 14,
-    color: "#666",
-    marginBottom: 15,
-  },
-  googleButton: {
-    flexDirection: "row", // Align icon and text horizontally
-    backgroundColor: "#4285F4", // Google blue
-    paddingVertical: 12, // Slightly less padding than main button
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    width: "100%",
+  signUpContainer: {
+    flexDirection: "row",
+    marginTop: 16,
     alignItems: "center",
-    justifyContent: "center", // Center content
-    shadowColor: "#4285F4",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 4,
-    marginTop: 0, // Removed margin top
-    minHeight: 50,
   },
-  googleIcon: {
-    width: 20,
-    height: 20,
-    marginRight: 12,
-  },
-  googleButtonText: {
-    color: "white",
-    fontWeight: "bold",
-    fontSize: 16,
+  signUpText: {
+    fontSize: 15,
+    color: "#666",
   },
   signUpLink: {
-    marginTop: 25, // Added margin top for spacing
-  },
-  toggleText: {
     color: "#006400",
     fontSize: 15,
     fontWeight: "bold",

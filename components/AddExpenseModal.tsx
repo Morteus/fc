@@ -1,28 +1,31 @@
-import React, { useState } from "react";
+import type { MaterialCommunityIcons as IconType } from "@expo/vector-icons";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { getAuth } from "firebase/auth"; // Import getAuth
+import { doc, getFirestore, setDoc } from "firebase/firestore"; // Keep setDoc
+import { useState } from "react";
 import {
-  View,
+  Alert,
+  Modal,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  Modal,
-  ScrollView,
-  Alert,
+  View,
 } from "react-native";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
-import type { MaterialCommunityIcons as IconType } from "@expo/vector-icons";
-import { getFirestore, doc, setDoc } from "firebase/firestore"; // Keep setDoc
-import { getAuth } from "firebase/auth"; // Import getAuth
 import { app } from "../app/firebase"; // Adjust path as needed
 
 // Hardcoded User ID
+
+//
 const HARDCODED_USER_ID = "User";
 
 // --- Default Icons (remain the same) ---
-const DEFAULT_ICONS: Array<{
+const DEFAULT_ICONS: {
   name: keyof typeof IconType.glyphMap;
   key: string;
-}> = [
+}[] = [
   { name: "file-document-outline", key: "document" },
   { name: "car", key: "car" },
   { name: "tshirt-crew", key: "clothing" },
@@ -35,6 +38,9 @@ const DEFAULT_ICONS: Array<{
   { name: "cart", key: "shopping" },
   { name: "basketball", key: "sports" },
   { name: "train", key: "travel" },
+  { name: "cellphone", key: "technology" },
+  { name: "beer", key: "drinks" },
+  { name: "coffee", key: "coffee" },
 ];
 
 // Initialize Firestore & Auth
@@ -132,11 +138,10 @@ export default function AddCategoryModal({
       animationType="fade"
       onRequestClose={handleClose}
     >
-      <View style={styles.modalContainer}>
+      <SafeAreaView style={styles.modalContainer}>
         <View style={styles.modalContent}>
           <Text style={styles.title}>Add New Expense Category</Text>
 
-          {/* Inputs and Icon Picker remain the same */}
           <Text style={styles.label}>Category Name:</Text>
           <TextInput
             style={styles.input}
@@ -158,157 +163,198 @@ export default function AddCategoryModal({
           />
 
           <Text style={styles.label}>Choose Icon:</Text>
-          <ScrollView style={styles.iconScrollView} nestedScrollEnabled={true}>
-            <View style={styles.iconGrid}>
-              {DEFAULT_ICONS.map((icon) => (
-                <TouchableOpacity
-                  key={icon.key}
-                  style={[
-                    styles.iconButton,
-                    selectedIcon === icon.name && styles.selectedIconButton,
-                  ]}
-                  onPress={() => setSelectedIcon(icon.name)}
-                >
-                  <MaterialCommunityIcons
-                    name={icon.name}
-                    size={24}
-                    color="white"
-                  />
-                </TouchableOpacity>
-              ))}
-            </View>
-          </ScrollView>
+          <View style={styles.iconScrollContainer}>
+            <ScrollView
+              style={styles.iconScrollView}
+              contentContainerStyle={styles.iconScrollContent}
+              nestedScrollEnabled={true}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.iconGrid}>
+                {DEFAULT_ICONS.map((icon) => (
+                  <TouchableOpacity
+                    key={icon.key}
+                    style={[
+                      styles.iconButton,
+                      selectedIcon === icon.name && styles.selectedIconButton,
+                    ]}
+                    onPress={() => setSelectedIcon(icon.name)}
+                    activeOpacity={0.7}
+                  >
+                    <MaterialCommunityIcons
+                      name={icon.name}
+                      size={24}
+                      color={selectedIcon === icon.name ? "#006400" : "white"}
+                    />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+          </View>
 
           <View style={styles.buttonContainer}>
             <TouchableOpacity
               style={[styles.button, styles.cancelButton]}
               onPress={handleClose}
+              activeOpacity={0.7}
             >
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.button, styles.saveButton]}
-              onPress={handleSave} // Use updated save handler
-              // Removed disabled prop
+              onPress={handleSave}
+              activeOpacity={0.7}
             >
               <Text style={styles.saveButtonText}>Save</Text>
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }
 
 // --- Styles ---
 const styles = StyleSheet.create({
-  // Removed disabledButtonText style
   modalContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    backgroundColor: "rgba(0, 0, 0, 0.65)",
+    paddingHorizontal: 20,
   },
   modalContent: {
     backgroundColor: "white",
-    borderRadius: 12,
-    padding: 25,
-    width: "90%",
-    maxWidth: 400,
-    maxHeight: "85%",
+    borderRadius: 20,
+    padding: 20,
+    width: "100%",
+    maxWidth: 350,
+    maxHeight: "80%",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 10,
+    alignSelf: "center",
   },
   title: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#006400", // Theme color
-    marginBottom: 25,
+    color: "#B58900",
+    marginBottom: 16,
     textAlign: "center",
+    letterSpacing: 0.3,
   },
   label: {
-    fontSize: 16,
-    color: "#333",
-    marginBottom: 8,
-    fontWeight: "500",
+    fontSize: 15,
+    color: "#444",
+    marginBottom: 6,
+    marginTop: 4,
+    fontWeight: "600",
+    letterSpacing: 0.2,
+    alignSelf: "flex-start",
+  },
+  iconScrollContainer: {
+    width: "100%",
+    borderWidth: 1.5,
+    borderColor: "#eee",
+    borderRadius: 15,
+    marginBottom: 20,
+    backgroundColor: "#f8f9fa",
+    alignSelf: "center",
   },
   iconScrollView: {
-    maxHeight: 180, // Adjust height
-    marginBottom: 25,
-    borderWidth: 1,
-    borderColor: "#eee",
-    borderRadius: 8,
-    padding: 5,
+    maxHeight: 180,
+  },
+  iconScrollContent: {
+    padding: 12,
+    paddingBottom: 4,
   },
   iconGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    justifyContent: "center", // Center icons
-    gap: 12, // Spacing
+    justifyContent: "space-between",
+    width: "100%",
   },
   iconButton: {
-    width: 55,
-    height: 55,
-    borderRadius: 27.5,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: "#006400",
     justifyContent: "center",
     alignItems: "center",
+    marginBottom: 12,
+    marginHorizontal: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
   selectedIconButton: {
-    backgroundColor: "#004d00",
+    backgroundColor: "#B58900",
     borderWidth: 2,
-    borderColor: "#DAA520",
+    borderColor: "#006400",
+    transform: [{ scale: 1.05 }],
   },
   input: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 20,
-    fontSize: 16,
-    backgroundColor: "#f9f9f9",
+    borderWidth: 1.5,
+    borderColor: "#ddd",
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 16,
+    fontSize: 15,
+    backgroundColor: "#fff",
+    color: "#212529",
+    width: "100%",
+    alignSelf: "center",
   },
   descriptionInput: {
-    height: 80,
+    height: 70,
     textAlignVertical: "top",
   },
   buttonContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 20,
+    marginTop: 8,
+    width: "100%",
+    alignSelf: "center",
   },
   button: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: 8,
-    marginHorizontal: 6,
+    paddingVertical: 12,
+    borderRadius: 15,
+    marginHorizontal: 5,
     alignItems: "center",
     justifyContent: "center",
+    minHeight: 46,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
   cancelButton: {
-    backgroundColor: "#f8f9fa",
+    backgroundColor: "#f5f5f5",
     borderWidth: 1,
-    borderColor: "#ced4da",
+    borderColor: "#ddd",
   },
   saveButton: {
-    backgroundColor: "#DAA520",
+    backgroundColor: "#B58900",
     borderWidth: 1,
-    borderColor: "#DAA520",
+    borderColor: "#B58900",
   },
-  // Removed disabledSaveButton style
   cancelButtonText: {
-    color: "#495057",
-    textAlign: "center",
-    fontSize: 16,
-    fontWeight: "bold",
+    color: "#555",
+    fontSize: 15,
+    fontWeight: "700",
+    letterSpacing: 0.2,
   },
   saveButtonText: {
     color: "white",
-    textAlign: "center",
-    fontSize: 16,
-    fontWeight: "bold",
+    fontSize: 15,
+    fontWeight: "700",
+    letterSpacing: 0.2,
   },
 });

@@ -1,25 +1,24 @@
 // c:\Users\scubo\OneDrive\Documents\putangina\fc\components\SummaryModal.tsx
-import React, { useState, useEffect, useMemo } from "react";
-import {
-  View,
-  Text,
-  Modal,
-  StyleSheet,
-  TouchableOpacity,
-  ActivityIndicator,
-  ScrollView,
-  Alert,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
+import { User } from "firebase/auth";
 import {
   collection,
-  query,
-  where,
   onSnapshot,
+  query,
   Timestamp,
+  where,
 } from "firebase/firestore";
-import { User } from "firebase/auth";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { db } from "../app/firebase";
 import { formatCurrency } from "../utils/formatting";
 

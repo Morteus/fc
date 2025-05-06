@@ -1,39 +1,35 @@
 // c:\Users\scubo\OneDrive\Documents\putangina\fc\app\transactions.tsx
-import React, { useState, useEffect, useCallback } from "react";
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  StyleSheet,
-  Modal,
-  TextInput,
-  Alert,
-  ActivityIndicator,
-  Image,
-  ImageSourcePropType,
-  Keyboard,
-  Platform, // Import Platform for KeyboardAvoidingView
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context"; // Import SafeAreaView
-import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Stack, useNavigation } from "expo-router";
-import AddIncomeCategoryModal from "../components/AddIncomeModal";
-import AddExpenseCategoryModal from "../components/AddExpenseModal";
+import { onAuthStateChanged, User } from "firebase/auth";
 import {
-  getFirestore,
-  collection,
   addDoc,
+  collection,
   doc,
+  onSnapshot,
+  orderBy,
+  query,
   runTransaction,
   serverTimestamp,
-  onSnapshot,
-  query,
-  orderBy,
-  Timestamp,
 } from "firebase/firestore";
-import { onAuthStateChanged, User } from "firebase/auth";
-import { app, db, auth } from "../app/firebase";
+import { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  ImageSourcePropType,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { auth, db } from "../app/firebase";
+import AddExpenseCategoryModal from "../components/AddExpenseModal";
+import AddIncomeCategoryModal from "../components/AddIncomeModal";
 
 // --- Interfaces ---
 interface Category {
@@ -436,7 +432,7 @@ export default function TransactionScreen() {
     );
 
     return () => unsubscribeAccounts();
-  }, [currentUser]);
+  }, [currentUser, selectedAccountId]);
 
   const handleAddCategory = (newCategoryData: {
     name: string;
@@ -588,6 +584,7 @@ export default function TransactionScreen() {
             <TouchableOpacity
               style={styles.headerButton}
               onPress={handleCancel}
+              activeOpacity={0.7}
             >
               <Text style={styles.headerButtonText}>Cancel</Text>
             </TouchableOpacity>
@@ -596,6 +593,7 @@ export default function TransactionScreen() {
             <TouchableOpacity
               style={styles.headerButton}
               onPress={handleSaveHeader}
+              activeOpacity={0.7}
             >
               <Text style={styles.headerButtonText}>Save</Text>
             </TouchableOpacity>
@@ -604,7 +602,7 @@ export default function TransactionScreen() {
           headerTitleAlign: "center",
           headerStyle: { backgroundColor: "#006400" },
           headerTintColor: "#fff",
-          headerTitleStyle: { fontWeight: "bold" },
+          headerTitleStyle: { fontWeight: "bold", fontSize: 18 },
         }}
       />
 
@@ -616,7 +614,14 @@ export default function TransactionScreen() {
             transactionType === "Expenses" && styles.activeTypeButton,
           ]}
           onPress={() => setTransactionType("Expenses")}
+          activeOpacity={0.7}
         >
+          <Ionicons
+            name="arrow-down-outline"
+            size={18}
+            color={transactionType === "Expenses" ? "#fff" : "#666"}
+            style={{ marginRight: 6 }}
+          />
           <Text
             style={[
               styles.typeButtonText,
@@ -632,7 +637,14 @@ export default function TransactionScreen() {
             transactionType === "Income" && styles.activeTypeButton,
           ]}
           onPress={() => setTransactionType("Income")}
+          activeOpacity={0.7}
         >
+          <Ionicons
+            name="arrow-up-outline"
+            size={18}
+            color={transactionType === "Income" ? "#fff" : "#666"}
+            style={{ marginRight: 6 }}
+          />
           <Text
             style={[
               styles.typeButtonText,
@@ -645,7 +657,12 @@ export default function TransactionScreen() {
       </View>
 
       {/* ScrollView Content */}
-      <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.sectionTitle}>Categories</Text>
         <View style={styles.categoriesGrid}>
           {currentCategories.map((category) => (
@@ -658,6 +675,7 @@ export default function TransactionScreen() {
                   styles.categoryItemSelected,
               ]}
               onPress={() => handleCategoryPress(category)}
+              activeOpacity={0.7}
             >
               <View
                 style={[
@@ -727,136 +745,133 @@ export default function TransactionScreen() {
         animationType="fade"
         onRequestClose={handleCloseAmountModal}
       >
-        {/* Wrap modal content in SafeAreaView */}
         <SafeAreaView style={styles.amountModalSafeArea}>
-          <ScrollView
-            contentContainerStyle={styles.amountModalScrollContent}
-            keyboardShouldPersistTaps="handled"
-          >
-            <View style={styles.amountModalContent}>
-              <Text style={styles.amountModalTitle}>
-                Enter {transactionType === "Income" ? "Income" : "Expense"}{" "}
-                Details
-              </Text>
+          <View style={styles.amountModalContent}>
+            <Text style={styles.amountModalTitle}>
+              Enter {transactionType === "Income" ? "Income" : "Expense"}{" "}
+              Details
+            </Text>
 
-              {selectedCategoryForAmount && (
-                <View style={styles.categoryInfoContainer}>
-                  <View style={styles.categoryIconSmall}>
-                    <MaterialCommunityIcons
-                      name={
-                        selectedCategoryForAmount.icon as keyof typeof MaterialCommunityIcons.glyphMap
-                      }
-                      size={20}
-                      color="white"
-                    />
-                  </View>
-                  <View style={styles.categoryDetails}>
-                    <Text style={styles.categoryInfoName}>
-                      {selectedCategoryForAmount.name}
+            {selectedCategoryForAmount && (
+              <View style={styles.categoryInfoContainer}>
+                <View style={styles.categoryIconSmall}>
+                  <MaterialCommunityIcons
+                    name={
+                      selectedCategoryForAmount.icon as keyof typeof MaterialCommunityIcons.glyphMap
+                    }
+                    size={20}
+                    color="white"
+                  />
+                </View>
+                <View style={styles.categoryDetails}>
+                  <Text style={styles.categoryInfoName}>
+                    {selectedCategoryForAmount.name}
+                  </Text>
+                  {selectedCategoryForAmount.description && (
+                    <Text style={styles.categoryInfoDesc}>
+                      {selectedCategoryForAmount.description}
                     </Text>
-                    {selectedCategoryForAmount.description && (
-                      <Text style={styles.categoryInfoDesc}>
-                        {selectedCategoryForAmount.description}
-                      </Text>
-                    )}
-                  </View>
+                  )}
                 </View>
-              )}
-
-              <Text style={styles.amountLabel}>Amount:</Text>
-              <TextInput
-                style={styles.amountInput}
-                placeholder="0.00"
-                keyboardType="numeric"
-                value={amount}
-                onChangeText={setAmount}
-                placeholderTextColor="#999"
-                autoFocus={!selectedCategoryForAmount}
-              />
-
-              <Text style={styles.amountLabel}>Description (Optional):</Text>
-              <TextInput
-                style={styles.descriptionInput}
-                placeholder="e.g., Coffee, Groceries, Gas Station"
-                value={transactionDescription}
-                onChangeText={handleDescriptionChange}
-                placeholderTextColor="#999"
-                autoFocus={!!selectedCategoryForAmount}
-              />
-
-              <Text style={styles.amountLabel}>Account:</Text>
-              {isLoadingAccounts ? (
-                <ActivityIndicator
-                  color="#006400"
-                  style={styles.accountLoader}
-                />
-              ) : errorAccounts ? (
-                <Text style={styles.errorTextSmall}>{errorAccounts}</Text>
-              ) : accountsList.length === 0 ? (
-                <Text style={styles.infoTextSmall}>
-                  No accounts found. Please add an account first.
-                </Text>
-              ) : (
-                <View style={styles.accountSelectorContainer}>
-                  <ScrollView nestedScrollEnabled={true}>
-                    {accountsList.map((account) => (
-                      <TouchableOpacity
-                        key={account.id}
-                        style={[
-                          styles.accountSelectItem,
-                          selectedAccountId === account.id &&
-                            styles.accountSelectItemActive,
-                        ]}
-                        onPress={() => setSelectedAccountId(account.id)}
-                      >
-                        <Image
-                          source={getIconSourceFromName(account.iconName)}
-                          style={styles.accountSelectIconImage}
-                          resizeMode="contain"
-                        />
-                        <Text
-                          style={[
-                            styles.accountSelectText,
-                            selectedAccountId === account.id &&
-                              styles.accountSelectTextActive,
-                          ]}
-                        >
-                          {account.title}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-
-              <View style={styles.amountModalButtons}>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.cancelButton]}
-                  onPress={handleCloseAmountModal}
-                >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.modalButton,
-                    styles.saveButton,
-                    (isLoadingAccounts ||
-                      (!selectedCategoryForAmount && !suggestedCategoryId) ||
-                      !currentUser) &&
-                      styles.saveButtonDisabled,
-                  ]}
-                  onPress={handleSaveAmount}
-                  disabled={
-                    !currentUser ||
-                    isLoadingAccounts ||
-                    (!selectedCategoryForAmount && !suggestedCategoryId)
-                  }
-                >
-                  <Text style={styles.saveButtonText}>Save</Text>
-                </TouchableOpacity>
               </View>
+            )}
+
+            <Text style={styles.amountLabel}>Amount:</Text>
+            <TextInput
+              style={styles.amountInput}
+              placeholder="0.00"
+              keyboardType="numeric"
+              value={amount}
+              onChangeText={setAmount}
+              placeholderTextColor="#999"
+              autoFocus={!selectedCategoryForAmount}
+            />
+
+            <Text style={styles.amountLabel}>Description (Optional):</Text>
+            <TextInput
+              style={styles.descriptionInput}
+              placeholder="e.g., Coffee, Groceries, Gas Station"
+              value={transactionDescription}
+              onChangeText={handleDescriptionChange}
+              placeholderTextColor="#999"
+              autoFocus={!!selectedCategoryForAmount}
+            />
+
+            <Text style={styles.amountLabel}>Account:</Text>
+            {isLoadingAccounts ? (
+              <ActivityIndicator color="#006400" style={styles.accountLoader} />
+            ) : errorAccounts ? (
+              <Text style={styles.errorTextSmall}>{errorAccounts}</Text>
+            ) : accountsList.length === 0 ? (
+              <Text style={styles.infoTextSmall}>
+                No accounts found. Please add an account first.
+              </Text>
+            ) : (
+              <View style={styles.accountSelectorContainer}>
+                <ScrollView
+                  nestedScrollEnabled={true}
+                  showsVerticalScrollIndicator={false}
+                >
+                  {accountsList.map((account) => (
+                    <TouchableOpacity
+                      key={account.id}
+                      style={[
+                        styles.accountSelectItem,
+                        selectedAccountId === account.id &&
+                          styles.accountSelectItemActive,
+                      ]}
+                      onPress={() => setSelectedAccountId(account.id)}
+                      activeOpacity={0.7}
+                    >
+                      <Image
+                        source={getIconSourceFromName(account.iconName)}
+                        style={styles.accountSelectIconImage}
+                        resizeMode="contain"
+                      />
+                      <Text
+                        style={[
+                          styles.accountSelectText,
+                          selectedAccountId === account.id &&
+                            styles.accountSelectTextActive,
+                        ]}
+                      >
+                        {account.title}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            <View style={styles.amountModalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={handleCloseAmountModal}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalButton,
+                  styles.saveButton,
+                  (isLoadingAccounts ||
+                    (!selectedCategoryForAmount && !suggestedCategoryId) ||
+                    !currentUser) &&
+                    styles.saveButtonDisabled,
+                ]}
+                onPress={handleSaveAmount}
+                disabled={
+                  !currentUser ||
+                  isLoadingAccounts ||
+                  (!selectedCategoryForAmount && !suggestedCategoryId)
+                }
+                activeOpacity={0.7}
+              >
+                <Text style={styles.saveButtonText}>Save</Text>
+              </TouchableOpacity>
             </View>
-          </ScrollView>
+          </View>
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
@@ -866,154 +881,193 @@ export default function TransactionScreen() {
 const styles = StyleSheet.create({
   safeAreaContainer: {
     flex: 1,
-    backgroundColor: "#f8f9fa", // Match background
+    backgroundColor: "#f8f9fa",
   },
-  // container style removed
-  headerButton: { paddingHorizontal: 15, paddingVertical: 10 },
-  headerButtonText: { fontSize: 16, color: "#fff", fontWeight: "500" },
+  headerButton: {
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+  },
+  headerButtonText: {
+    fontSize: 16,
+    color: "#fff",
+    fontWeight: "500",
+  },
   typeSelector: {
     flexDirection: "row",
     backgroundColor: "#fff",
     borderBottomWidth: 1,
     borderBottomColor: "#e9ecef",
+    padding: 8,
+    paddingHorizontal: 12,
+    marginBottom: 0,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
   },
   typeButton: {
     flex: 1,
     paddingVertical: 12,
     alignItems: "center",
-    borderBottomWidth: 3,
-    borderBottomColor: "transparent",
+    justifyContent: "center",
+    borderRadius: 8,
+    marginHorizontal: 6,
+    flexDirection: "row",
   },
-  activeTypeButton: { borderBottomColor: "#006400" },
-  typeButtonText: { fontSize: 16, color: "#6c757d" },
-  activeTypeButtonText: { color: "#006400", fontWeight: "bold" },
-  content: { flex: 1, padding: 15 },
+  activeTypeButton: {
+    backgroundColor: "#006400",
+    shadowColor: "#006400",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  typeButtonText: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#666",
+  },
+  activeTypeButtonText: {
+    color: "#fff",
+    fontWeight: "600",
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 16,
+  },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#DAA520",
-    marginBottom: 15,
-    paddingLeft: 5,
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#B58900",
+    marginBottom: 18,
+    paddingLeft: 4,
+    letterSpacing: 0.2,
   },
   categoriesGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    justifyContent: "flex-start",
-    marginHorizontal: -5,
+    justifyContent: "space-evenly",
+    paddingTop: 4,
   },
   categoryItem: {
-    width: "25%",
+    width: "30%",
     alignItems: "center",
-    marginBottom: 25,
-    paddingHorizontal: 5,
+    marginBottom: 22,
     position: "relative",
   },
-  categoryItemSelected: {},
+  categoryItemSelected: {
+    transform: [{ scale: 1.05 }],
+  },
   categoryIcon: {
-    width: 55,
-    height: 55,
-    borderRadius: 27.5,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: "#006400",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 3,
-    elevation: 3,
+    // shadowColor: "#000",
+    // shadowOffset: { width: 0, height: 3 },
+    // shadowOpacity: 0.2,
+    // shadowRadius: 4,
+    // elevation: 4,
     borderWidth: 2,
     borderColor: "transparent",
   },
   categoryIconSelected: {
-    backgroundColor: "#DAA520",
+    backgroundColor: "#B58900",
     borderColor: "#006400",
   },
   categoryText: {
-    fontSize: 12,
+    fontSize: 13,
     textAlign: "center",
-    color: "#495057",
+    color: "#444",
     fontWeight: "500",
-    marginTop: 2,
+    marginTop: 4,
+    lineHeight: 16,
+    paddingHorizontal: 2,
   },
   categoryTextSelected: {
-    fontWeight: "bold",
+    fontWeight: "700",
     color: "#006400",
   },
   suggestionLabel: {
     position: "absolute",
     top: -8,
-    right: 0,
-    backgroundColor: "#DAA520",
+    right: 2,
+    backgroundColor: "#B58900",
     color: "white",
     fontSize: 9,
     fontWeight: "bold",
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
     overflow: "hidden",
   },
   addNewButton: {
     width: "100%",
-    paddingVertical: 12,
-    backgroundColor: "#DAA520",
-    borderRadius: 8,
+    paddingVertical: 14,
+    backgroundColor: "#B58900",
+    borderRadius: 12,
     alignItems: "center",
     marginTop: 10,
-    marginLeft: 5,
-    marginRight: 5,
+    marginBottom: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
   addNewButtonText: {
     color: "#fff",
     fontSize: 16,
-    fontWeight: "bold",
+    fontWeight: "700",
+    letterSpacing: 0.1,
   },
   amountModalSafeArea: {
-    // Style for the modal's SafeAreaView
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
-  },
-  // amountModalContainer removed, replaced by amountModalSafeArea
-  amountModalScrollContent: {
-    flexGrow: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: 20,
-    width: "100%",
+    backgroundColor: "rgba(0, 0, 0, 0.65)",
+    paddingHorizontal: 20,
   },
   amountModalContent: {
     backgroundColor: "white",
-    borderRadius: 12,
-    padding: 25,
-    width: "90%",
-    maxWidth: 380,
-    alignItems: "stretch",
+    borderRadius: 20,
+    padding: 20,
+    width: "100%",
+    maxWidth: 350,
+    maxHeight: "90%",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 10,
+    overflow: "hidden",
   },
   amountModalTitle: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#006400",
-    marginBottom: 20,
+    color: "#B58900",
+    marginBottom: 16,
     textAlign: "center",
+    letterSpacing: 0.3,
   },
   categoryInfoContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 16,
     backgroundColor: "#f8f9fa",
     paddingVertical: 12,
-    paddingHorizontal: 15,
-    borderRadius: 8,
+    paddingHorizontal: 14,
+    borderRadius: 15,
     width: "100%",
     borderWidth: 1,
-    borderColor: "#e9ecef",
+    borderColor: "#eee",
+    alignSelf: "center",
   },
   categoryIconSmall: {
     width: 40,
@@ -1022,7 +1076,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#006400",
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 12,
+    marginRight: 14,
   },
   categoryDetails: {
     flex: 1,
@@ -1030,61 +1084,68 @@ const styles = StyleSheet.create({
   categoryInfoName: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#343a40",
+    color: "#333",
+    letterSpacing: 0.2,
   },
   categoryInfoDesc: {
     fontSize: 13,
-    color: "#6c757d",
+    color: "#666",
     marginTop: 3,
+    lineHeight: 17,
   },
   amountLabel: {
-    fontSize: 16,
-    color: "#495057",
-    marginBottom: 8,
+    fontSize: 15,
+    color: "#444",
+    marginBottom: 6,
+    marginTop: 4,
     alignSelf: "flex-start",
     width: "100%",
-    fontWeight: "500",
+    fontWeight: "600",
+    letterSpacing: 0.2,
   },
   amountInput: {
-    borderWidth: 1,
-    borderColor: "#ced4da",
-    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: "#ddd",
+    borderRadius: 12,
     paddingVertical: 12,
-    paddingHorizontal: 15,
-    marginBottom: 20,
+    paddingHorizontal: 14,
+    marginBottom: 16,
     fontSize: 20,
     width: "100%",
     textAlign: "left",
     backgroundColor: "#fff",
     color: "#212529",
+    alignSelf: "center",
   },
   descriptionInput: {
-    borderWidth: 1,
-    borderColor: "#ced4da",
-    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: "#ddd",
+    borderRadius: 12,
     paddingVertical: 12,
-    paddingHorizontal: 15,
-    marginBottom: 20,
-    fontSize: 16,
+    paddingHorizontal: 14,
+    marginBottom: 16,
+    fontSize: 15,
     width: "100%",
     backgroundColor: "#fff",
     color: "#212529",
-    minHeight: 40,
+    minHeight: 46,
+    alignSelf: "center",
   },
   accountSelectorContainer: {
     width: "100%",
-    marginBottom: 25,
-    maxHeight: 150,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    borderRadius: 8,
+    marginBottom: 20,
+    maxHeight: 140,
+    borderWidth: 1.5,
+    borderColor: "#eee",
+    borderRadius: 15,
     overflow: "hidden",
+    alignSelf: "center",
   },
   accountSelectItem: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 10,
-    paddingHorizontal: 15,
+    paddingHorizontal: 14,
     borderBottomWidth: 1,
     borderBottomColor: "#eee",
     backgroundColor: "#fff",
@@ -1098,52 +1159,61 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   accountSelectText: {
-    fontSize: 16,
+    fontSize: 15,
     color: "#333",
+    fontWeight: "500",
   },
   accountSelectTextActive: {
     color: "#fff",
-    fontWeight: "bold",
+    fontWeight: "700",
   },
   accountLoader: {
     marginVertical: 20,
   },
   errorTextSmall: {
-    color: "red",
+    color: "#E53935",
     fontSize: 14,
     textAlign: "center",
-    marginVertical: 15,
+    marginVertical: 12,
+    lineHeight: 18,
   },
   infoTextSmall: {
-    color: "#6c757d",
+    color: "#666",
     fontSize: 14,
     textAlign: "center",
-    marginVertical: 15,
+    marginVertical: 12,
+    lineHeight: 18,
   },
   amountModalButtons: {
     flexDirection: "row",
     justifyContent: "space-between",
     width: "100%",
-    marginTop: 10,
+    marginTop: 8,
+    alignSelf: "center",
   },
   modalButton: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: 8,
-    marginHorizontal: 6,
+    paddingVertical: 12,
+    borderRadius: 15,
+    marginHorizontal: 5,
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 48,
+    minHeight: 46,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
   cancelButton: {
-    backgroundColor: "#f8f9fa",
+    backgroundColor: "#f5f5f5",
     borderWidth: 1,
-    borderColor: "#ced4da",
+    borderColor: "#ddd",
   },
   saveButton: {
-    backgroundColor: "#DAA520",
+    backgroundColor: "#B58900",
     borderWidth: 1,
-    borderColor: "#DAA520",
+    borderColor: "#B58900",
   },
   saveButtonDisabled: {
     backgroundColor: "#e9d8a1",
@@ -1151,13 +1221,18 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   cancelButtonText: {
-    color: "#495057",
-    fontSize: 16,
-    fontWeight: "bold",
+    color: "#555",
+    fontSize: 15,
+    fontWeight: "700",
+    letterSpacing: 0.2,
   },
   saveButtonText: {
     color: "white",
-    fontSize: 16,
-    fontWeight: "bold",
+    fontSize: 15,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
+  scrollContent: {
+    paddingBottom: 20,
   },
 });

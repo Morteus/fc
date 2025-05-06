@@ -1,32 +1,30 @@
 // c:\Users\scubo\OneDrive\Documents\putangina\fc\app\record.tsx
-import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  ActivityIndicator,
-  Alert,
-  // Platform removed
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context"; // Import SafeAreaView
-import HeaderTopNav from "../components/headertopnav";
-import BotNavigationBar from "../components/botnavigationbar";
-import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { onAuthStateChanged, User } from "firebase/auth";
 import {
   collection,
-  query,
   onSnapshot,
   orderBy,
+  query,
   Timestamp,
   where,
 } from "firebase/firestore";
-import { onAuthStateChanged, User } from "firebase/auth";
-import { db, auth } from "../app/firebase";
-import { useDateContext } from "./context/DateContext";
+import { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { auth, db } from "../app/firebase";
+import BotNavigationBar from "../components/botnavigationbar";
+import HeaderTopNav from "../components/headertopnav";
 import { formatCurrency } from "../utils/formatting";
+import { useDateContext } from "./context/DateContext";
 
 interface Transaction {
   id: string;
@@ -77,7 +75,7 @@ const getMonthNumber = (monthName: string): number => {
 const HistoryScreen = () => {
   const router = useRouter();
   const { selectedYear, selectedMonth, selectedFilter, selectedCurrency } =
-    useDateContext(); // Add selectedFilter
+    useDateContext();
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -237,22 +235,27 @@ const HistoryScreen = () => {
       );
       unsubscribe();
     };
-  }, [currentUser, selectedYear, selectedMonth, selectedFilter]); // Add selectedFilter to dependencies
+  }, [currentUser, selectedYear, selectedMonth, selectedFilter]);
 
   const renderContent = () => {
     if (!currentUser && !loading) {
       return (
         <View style={styles.centered}>
-          <MaterialIcons name="login" size={40} color="#888" />
-          <Text style={styles.infoText}>{error || "Please log in."}</Text>
+          <View style={styles.emptyStateContainer}>
+            <MaterialIcons name="login" size={64} color="#ccc" />
+            <Text style={styles.emptyStateTitle}>Not Logged In</Text>
+            <Text style={styles.emptyStateText}>
+              {error || "Please log in to view your transaction records."}
+            </Text>
+          </View>
         </View>
       );
     }
     if (loading) {
       return (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#006400" />
-          <Text style={styles.infoText}>
+          <ActivityIndicator size="large" color="#B58900" />
+          <Text style={styles.loadingText}>
             Loading Records for{" "}
             {selectedFilter === "Daily"
               ? "Today"
@@ -268,20 +271,17 @@ const HistoryScreen = () => {
     if (error) {
       return (
         <View style={styles.centered}>
-          <MaterialIcons name="error-outline" size={40} color="red" />
-          <Text style={[styles.infoText, styles.errorText]}>{error}</Text>
-          {error.includes("index") && (
-            <Text
-              style={[
-                styles.infoText,
-                styles.errorText,
-                { fontSize: 12, marginTop: 5 },
-              ]}
-            >
-              (You might need to create a composite index in your Firebase
-              Firestore settings)
-            </Text>
-          )}
+          <View style={styles.emptyStateContainer}>
+            <MaterialIcons name="error-outline" size={64} color="#E53935" />
+            <Text style={styles.errorTitle}>Error</Text>
+            <Text style={styles.errorText}>{error}</Text>
+            {error.includes("index") && (
+              <Text style={styles.errorHint}>
+                (You might need to create a composite index in your Firebase
+                Firestore settings)
+              </Text>
+            )}
+          </View>
         </View>
       );
     }
@@ -289,19 +289,22 @@ const HistoryScreen = () => {
     if (transactions.length === 0) {
       return (
         <View style={styles.centered}>
-          <MaterialIcons name="hourglass-empty" size={40} color="#888" />
-          <Text style={styles.infoText}>No transactions recorded for</Text>
-          <Text style={styles.infoText}>
-            {selectedFilter === "Daily"
-              ? "Today"
-              : selectedFilter === "Weekly"
-              ? "This Week"
-              : `${selectedMonth} ${selectedYear}`}
-            .
-          </Text>
-          <Text style={[styles.infoText, { marginTop: 20 }]}>
-            Tap '+' to add one!
-          </Text>
+          <View style={styles.emptyStateContainer}>
+            <MaterialIcons name="hourglass-empty" size={64} color="#ccc" />
+            <Text style={styles.emptyStateTitle}>No Transactions</Text>
+            <Text style={styles.emptyStateText}>
+              No transactions recorded for{" "}
+              {selectedFilter === "Daily"
+                ? "Today"
+                : selectedFilter === "Weekly"
+                ? "This Week"
+                : `${selectedMonth} ${selectedYear}`}
+              .
+            </Text>
+            <Text style={styles.emptyStateAction}>
+              Tap &apos;+&apos; to add one!
+            </Text>
+          </View>
         </View>
       );
     }
@@ -316,20 +319,35 @@ const HistoryScreen = () => {
     });
 
     return (
-      <ScrollView style={styles.content}>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={styles.scrollContent}
+      >
         {Object.entries(groupedTransactions).map(
           ([date, dailyTransactions]) => (
             <View key={date} style={styles.dateGroup}>
               <Text style={styles.dateHeader}>{date}</Text>
               {dailyTransactions.map((transaction) => (
-                <View key={transaction.id} style={styles.transactionItem}>
+                <TouchableOpacity
+                  key={transaction.id}
+                  style={styles.transactionItem}
+                  activeOpacity={0.8}
+                >
                   <View style={styles.transactionDetails}>
-                    <MaterialCommunityIcons
-                      name={transaction.categoryIcon}
-                      size={24}
-                      color="#006400"
-                      style={styles.categoryIcon}
-                    />
+                    <View
+                      style={[
+                        styles.iconContainer,
+                        transaction.type === "Income"
+                          ? styles.incomeIconBg
+                          : styles.expenseIconBg,
+                      ]}
+                    >
+                      <MaterialCommunityIcons
+                        name={transaction.categoryIcon}
+                        size={24}
+                        color="#fff"
+                      />
+                    </View>
                     <View style={styles.textContainer}>
                       <Text style={styles.categoryName}>
                         {transaction.categoryName}
@@ -345,42 +363,43 @@ const HistoryScreen = () => {
                           : styles.expense
                       }
                     >
+                      {transaction.type === "Income" ? "+" : "-"}
                       {formatCurrency(transaction.amount, selectedCurrency)}
                     </Text>
                   </View>
-                </View>
+                </TouchableOpacity>
               ))}
             </View>
           )
         )}
+        {/* Bottom padding for FAB */}
+        <View style={styles.fabSpace} />
       </ScrollView>
     );
   };
 
   return (
     <>
-      {/* Use SafeAreaView for the main screen content area, excluding the bottom nav */}
-      <SafeAreaView style={styles.safeAreaContainer}>
-        {/* Header remains outside SafeAreaView to span full width */}
+      <SafeAreaView
+        style={styles.safeAreaContainer}
+        edges={["top", "left", "right"]}
+      >
         <View style={styles.headerContainer}>
           <HeaderTopNav />
         </View>
-        {/* Content area */}
         <View style={styles.mainContentContainer}>
           {renderContent()}
-          {/* FAB */}
-          {currentUser &&
-            !loading && ( // Also hide FAB while loading
-              <TouchableOpacity
-                style={styles.fab}
-                onPress={navigateToTransaction}
-              >
-                <MaterialIcons name="add" size={28} color="white" />
-              </TouchableOpacity>
-            )}
+          {currentUser && !loading && (
+            <TouchableOpacity
+              style={styles.fab}
+              activeOpacity={0.8}
+              onPress={navigateToTransaction}
+            >
+              <MaterialIcons name="add" size={28} color="white" />
+            </TouchableOpacity>
+          )}
         </View>
       </SafeAreaView>
-      {/* Bottom Nav remains outside SafeAreaView */}
       <BotNavigationBar />
     </>
   );
@@ -389,84 +408,143 @@ const HistoryScreen = () => {
 const styles = StyleSheet.create({
   safeAreaContainer: {
     flex: 1,
-    backgroundColor: "#f8f9fa", // Match background
+    backgroundColor: "#f5f5f7",
   },
   mainContentContainer: {
-    flex: 1, // Takes remaining space
+    flex: 1,
   },
   fab: {
     position: "absolute",
-    bottom: 20, // Adjusted bottom position (relative to mainContentContainer)
+    bottom: 20,
     right: 20,
-    backgroundColor: "#0F730C",
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    backgroundColor: "#B58900",
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     justifyContent: "center",
     alignItems: "center",
     elevation: 6,
     shadowColor: "#000",
     shadowOpacity: 0.3,
     shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 4,
-    zIndex: 1, // Ensure FAB is above ScrollView content
+    shadowRadius: 6,
+    zIndex: 1,
+  },
+  fabSpace: {
+    height: 80,
   },
   headerContainer: {
-    // Removed paddingTop, HeaderTopNav handles its internal padding
     backgroundColor: "#006400",
   },
-  // container style removed as SafeAreaView is the main container now
   content: {
-    flex: 1, // Ensure ScrollView takes space
+    flex: 1,
+  },
+  scrollContent: {
+    paddingTop: 8,
   },
   centered: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
-    // Removed paddingBottom, FAB positioning handles overlap
   },
-  infoText: {
-    marginTop: 10,
+  emptyStateContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 30,
+    maxWidth: 320,
+  },
+  emptyStateTitle: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: "#333",
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  emptyStateText: {
     fontSize: 16,
-    color: "#6c757d",
+    color: "#666",
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  emptyStateAction: {
+    fontSize: 16,
+    color: "#B58900",
+    fontWeight: "600",
+    marginTop: 24,
+    textAlign: "center",
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: "#666",
+    textAlign: "center",
+  },
+  errorTitle: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: "#E53935",
+    marginTop: 16,
+    marginBottom: 8,
     textAlign: "center",
   },
   errorText: {
-    color: "red",
-    fontWeight: "bold",
+    fontSize: 16,
+    color: "#333",
+    textAlign: "center",
+    fontWeight: "500",
+  },
+  errorHint: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
+    marginTop: 12,
+    fontStyle: "italic",
+    lineHeight: 20,
   },
   dateGroup: {
-    marginBottom: 15,
-    paddingHorizontal: 15,
+    marginBottom: 20,
+    paddingHorizontal: 16,
   },
   dateHeader: {
     fontSize: 14,
-    color: "#495057",
-    marginBottom: 10,
+    color: "#666",
+    marginBottom: 12,
     marginTop: 5,
-    fontWeight: "bold",
-    textTransform: "uppercase",
+    fontWeight: "600",
     letterSpacing: 0.5,
+    paddingHorizontal: 4,
   },
   transactionItem: {
-    marginBottom: 10,
+    marginBottom: 12,
   },
   transactionDetails: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#fff",
-    paddingVertical: 12,
-    paddingHorizontal: 15,
-    borderRadius: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    elevation: 2,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    // shadowColor: "#000",
+    // shadowOffset: { width: 0, height: 2 },
+    // shadowOpacity: 0.08,
+    // shadowRadius: 8,
+    // elevation: 2,
   },
-  categoryIcon: {
-    marginRight: 15,
+  iconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 16,
+  },
+  incomeIconBg: {
+    backgroundColor: "#28a745",
+  },
+  expenseIconBg: {
+    backgroundColor: "#dc3545",
   },
   textContainer: {
     flex: 1,
@@ -474,12 +552,13 @@ const styles = StyleSheet.create({
   },
   categoryName: {
     fontSize: 16,
-    color: "#343a40",
+    color: "#333",
+    fontWeight: "600",
   },
   accountNameText: {
-    fontSize: 13,
-    color: "#6c757d",
-    marginTop: 2,
+    fontSize: 14,
+    color: "#777",
+    marginTop: 4,
   },
   expense: {
     fontSize: 16,
