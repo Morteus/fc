@@ -39,34 +39,54 @@ export default function SetBudgetScreen() {
       return;
     }
 
-    const budgetData = {
-      categoryName: params.categoryName,
-      limit: limitValue,
-      icon: params.icon,
-      resetPeriod: selectedResetPeriod,
-      lastResetDate: new Date(),
-    };
+    if (!params.categoryName) {
+      Alert.alert("Error", "Category name is required");
+      return;
+    }
 
     try {
+      const budgetData = {
+        categoryName: params.categoryName,
+        limit: limitValue,
+        icon: params.icon || "help-circle-outline",
+        resetPeriod: selectedResetPeriod,
+        lastResetDate: new Date(),
+      };
+
       const budgetsColRef = collection(
         db,
         "Accounts",
         currentUser.uid,
         "budgets"
       );
-      if (params.budgetId) {
-        // Update existing budget
-        await updateDoc(
-          doc(budgetsColRef, params.budgetId as string),
-          budgetData
-        );
+
+      // Check if we have a valid budgetId for updating
+      if (
+        params.budgetId &&
+        params.budgetId !== "null" &&
+        params.budgetId !== "undefined"
+      ) {
+        console.log("Updating existing budget:", params.budgetId);
+        const budgetDocRef = doc(budgetsColRef, params.budgetId as string);
+        await updateDoc(budgetDocRef, budgetData);
       } else {
-        // Create new budget
-        await addDoc(budgetsColRef, budgetData);
+        // Always create new document if no valid budgetId
+        console.log("Creating new budget");
+        const docRef = await addDoc(budgetsColRef, budgetData);
+        console.log("Created with ID:", docRef.id);
       }
-      navigation.goBack();
-    } catch (error) {
-      Alert.alert("Error", "Failed to save budget");
+
+      Alert.alert(
+        "Success",
+        `Budget ${params.budgetId ? "updated" : "created"} successfully`,
+        [{ text: "OK", onPress: () => navigation.goBack() }]
+      );
+    } catch (error: any) {
+      console.error("Error saving budget:", error);
+      Alert.alert(
+        "Error",
+        `Failed to save budget: ${error.message || "Unknown error"}`
+      );
     }
   };
 

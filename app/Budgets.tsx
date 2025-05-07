@@ -1,5 +1,6 @@
 // c:\Users\scubo\OneDrive\Documents\putangina\fc\app\Budgets.tsx
 import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "expo-router";
 import { onAuthStateChanged, User } from "firebase/auth";
 import {
@@ -85,6 +86,17 @@ interface BudgetDisplayData {
   resetPeriod?: "Daily" | "Weekly" | "Monthly"; // Add this field
 }
 
+// Update the AlertState interface
+interface AlertState {
+  [key: string]: {
+    exceeded: boolean;
+    warning90: boolean;
+    warning75: boolean;
+    period: string; // Add period tracking
+    lastChecked: number; // Add timestamp
+  };
+}
+
 const getMonthNumber = (monthName: string): number => {
   const months = [
     "Jan",
@@ -139,6 +151,8 @@ const BudgetsScreen = () => {
     Set<string>
   >(new Set());
 
+  const [alertStates, setAlertStates] = useState<AlertState>({});
+
   const navigateToTransaction = () => {
     navigation.navigate("transactions" as never);
   };
@@ -159,6 +173,20 @@ const BudgetsScreen = () => {
       }
     });
     return () => unsubscribeAuth();
+  }, []);
+
+  useEffect(() => {
+    const loadAlertStates = async () => {
+      try {
+        const savedStates = await AsyncStorage.getItem("budgetAlertStates");
+        if (savedStates) {
+          setAlertStates(JSON.parse(savedStates));
+        }
+      } catch (error) {
+        console.error("Error loading alert states:", error);
+      }
+    };
+    loadAlertStates();
   }, []);
 
   useEffect(() => {
@@ -431,6 +459,7 @@ const BudgetsScreen = () => {
     );
   }, [displayItems]);
 
+  // Replace the existing useEffect for alerts with this updated version
   useEffect(() => {
     if (
       isLoadingBudgets ||
@@ -440,44 +469,106 @@ const BudgetsScreen = () => {
     )
       return;
 
-    const newlyExceeded = displayItems.filter(
-      (item) =>
-        item.limit > 0 &&
-        item.currentSpending > item.limit &&
-        !notifiedExceededCategories.has(item.categoryName)
+    const showAlerts = async () => {
+      const newAlertStates = { ...alertStates };
+      let shouldUpdateStorage = false;
+      const currentPeriod = `${selectedYear}-${selectedMonth}-${selectedFilter}`;
+      const now = Date.now();
+
+      for (const item of displayItems) {
+        if (item.limit <= 0) continue;
+
+        const percentage = (item.currentSpending / item.limit) * 100;
+        const categoryKey = item.categoryName;
+        const existingState = alertStates[categoryKey];
+
+        // Reset alerts if period changed or more than 24 hours passed
+        if (
+          !existingState ||
+          existingState.period !== currentPeriod ||
+          now - existingState.lastChecked > 24 * 60 * 60 * 1000
+        ) {
+          newAlertStates[categoryKey] = {
+            exceeded: false,
+            warning90: false,
+            warning75: false,
+            period: currentPeriod,
+            lastChecked: now,
+          };
+        }
+
+        const categoryState = newAlertStates[categoryKey];
+
+        // Show only the highest level alert that hasn't been shown
+        if (percentage >= 100 && !categoryState.exceeded) {
+          Alert.alert(
+            "Budget Exceeded!",
+            `You've exceeded your budget for ${item.categoryName}`
+          );
+          categoryState.exceeded = true;
+          categoryState.warning90 = true;
+          categoryState.warning75 = true;
+          shouldUpdateStorage = true;
+        } else if (
+          percentage >= 90 &&
+          !categoryState.warning90 &&
+          !categoryState.exceeded
+        ) {
+          Alert.alert(
+            "Budget Alert",
+            `You are at ${percentage.toFixed(0)}% of your budget for ${
+              item.categoryName
+            }`
+          );
+          categoryState.warning90 = true;
+          categoryState.warning75 = true;
+          shouldUpdateStorage = true;
+        } else if (
+          percentage >= 75 &&
+          !categoryState.warning75 &&
+          !categoryState.warning90
+        ) {
+          Alert.alert(
+            "Budget Warning",
+            `You are at ${percentage.toFixed(0)}% of your budget for ${
+              item.categoryName
+            }`
+          );
+          categoryState.warning75 = true;
+          shouldUpdateStorage = true;
+        }
+      }
+
+      if (shouldUpdateStorage) {
+        setAlertStates(newAlertStates);
+        await AsyncStorage.setItem(
+          "budgetAlertStates",
+          JSON.stringify(newAlertStates)
+        );
+      }
+    };
+
+    showAlerts();
+  }, [displayItems, selectedYear, selectedMonth, selectedFilter, alertStates]);
+
+  // Update the reset function
+  const resetCategoryAlerts = async (categoryName: string) => {
+    const currentPeriod = `${selectedYear}-${selectedMonth}-${selectedFilter}`;
+    const newAlertStates = {
+      ...alertStates,
+      [categoryName]: {
+        exceeded: false,
+        warning90: false,
+        warning75: false,
+        period: currentPeriod,
+        lastChecked: Date.now(),
+      },
+    };
+    setAlertStates(newAlertStates);
+    await AsyncStorage.setItem(
+      "budgetAlertStates",
+      JSON.stringify(newAlertStates)
     );
-
-    if (newlyExceeded.length > 0) {
-      const categoryNames = newlyExceeded
-        .map((item) => item.categoryName)
-        .join(", ");
-      Alert.alert(
-        "Budget Exceeded!",
-        `You've exceeded your budget for: ${categoryNames}`
-      );
-      setNotifiedExceededCategories((prev) => {
-        const newSet = new Set(prev);
-        newlyExceeded.forEach((item) => newSet.add(item.categoryName));
-        return newSet;
-      });
-    }
-  }, [
-    displayItems,
-    isLoadingBudgets,
-    isLoadingUserCategories,
-    isLoadingTransactions,
-    notifiedExceededCategories,
-  ]);
-
-  const checkBudgetAlert = (spending: number, limit: number) => {
-    const percentage = (spending / limit) * 100;
-    if (percentage >= 100) {
-      Alert.alert("Budget Exceeded!", "You have exceeded your budget limit.");
-    } else if (percentage >= 90) {
-      Alert.alert("Budget Alert", "You are at 90% of your budget limit!");
-    } else if (percentage >= 75) {
-      Alert.alert("Budget Warning", "You are at 75% of your budget limit.");
-    }
   };
 
   const openModalForCategory = (item: BudgetDisplayData) => {
@@ -490,7 +581,7 @@ const BudgetsScreen = () => {
     });
   };
 
-  const handleDeleteBudget = (
+  const handleDeleteBudget = async (
     budgetId: string | null,
     categoryName: string
   ) => {
@@ -524,6 +615,7 @@ const BudgetsScreen = () => {
             );
             try {
               await deleteDoc(budgetDocRef);
+              await resetCategoryAlerts(categoryName); // Add this line
               Alert.alert(
                 "Success",
                 `Budget limit for "${categoryName}" removed.`
