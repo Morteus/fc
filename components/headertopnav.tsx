@@ -1,5 +1,6 @@
 // c:\Users\scubo\Downloads\FinClassify-dea0c4be4da0318ed62b8b3aa713817c40b0002f\FinClassifyApp\components\headertopnav.tsx
 import { Ionicons } from "@expo/vector-icons";
+import { format } from "date-fns/format";
 import { useRouter } from "expo-router";
 import { getAuth, onAuthStateChanged, User } from "firebase/auth";
 import {
@@ -14,7 +15,6 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
-  FlatList,
   Modal,
   Platform,
   StatusBar,
@@ -27,6 +27,7 @@ import {
 import { useDateContext } from "../app/context/DateContext";
 import { app } from "../app/firebase";
 import { formatCurrency } from "../utils/formatting";
+import CalendarRangeModal from "./CalendarRangeModal";
 
 const { width, height } = Dimensions.get("window");
 const db = getFirestore(app);
@@ -62,35 +63,16 @@ type TimeFilter = "Daily" | "Weekly" | "Monthly";
 
 const Header = () => {
   const {
-    selectedYear,
-    selectedMonth,
-    setSelectedYear,
-    setSelectedMonth,
     selectedFilter,
     setSelectedFilter,
-    selectedDateString,
     selectedCurrency,
+    startDate,
+    endDate,
+    updateDateRange,
+    selectedDateString, // Make sure this is included
   } = useDateContext();
 
-  const currentYear = new Date().getFullYear();
-  const monthsArray = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
-
-  // Local state for UI control
-  const [showYearPicker, setShowYearPicker] = useState(false);
-  const [showMonthPicker, setShowMonthPicker] = useState(false);
+  // Remove unused state and variables
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [totalIncome, setTotalIncome] = useState(0);
@@ -102,8 +84,8 @@ const Header = () => {
     AccountForIncome[]
   >([]);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
+  const [showCalendar, setShowCalendar] = useState(false);
 
-  const years = Array.from({ length: 10 }, (_, i) => currentYear - 5 + i);
   const router = useRouter();
 
   // --- Listen for Auth State Changes ---
@@ -197,55 +179,11 @@ const Header = () => {
       return;
     }
 
-    const monthNumber = getMonthNumber(selectedMonth);
-    if (monthNumber < 0 && selectedFilter === "Monthly") {
-      setErrorTotals("Invalid month selected.");
-      setIsLoadingTotals(false);
-      return;
-    }
-
     // Calculate date range based on filter
-    let startDate: Date;
-    let endDate: Date;
-    const now = new Date();
-
-    if (selectedFilter === "Daily") {
-      startDate = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate(),
-        0,
-        0,
-        0
-      );
-      endDate = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate() + 1,
-        0,
-        0,
-        0
-      );
-    } else if (selectedFilter === "Weekly") {
-      const dayOfWeek = now.getDay(); // 0 (Sun) - 6 (Sat)
-      const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Adjust to start on Monday
-      startDate = new Date(now.getFullYear(), now.getMonth(), diff, 0, 0, 0);
-      endDate = new Date(
-        startDate.getFullYear(),
-        startDate.getMonth(),
-        startDate.getDate() + 7,
-        0,
-        0,
-        0
-      );
-    } else {
-      // Monthly
-      startDate = new Date(selectedYear, monthNumber, 1, 0, 0, 0);
-      endDate = new Date(selectedYear, monthNumber + 1, 1, 0, 0, 0);
-    }
-
-    const startTimestamp = Timestamp.fromDate(startDate);
-    const endTimestamp = Timestamp.fromDate(endDate);
+    let startTimestamp = Timestamp.fromDate(startDate);
+    let endTimestamp = Timestamp.fromDate(
+      new Date(endDate.getTime() + 86400000)
+    );
 
     // Calculate estimated recurring income
     let estimatedRecurringIncome = 0;
@@ -284,6 +222,7 @@ const Header = () => {
 
     const q = query(
       transactionsCollectionRef,
+      where("isDeleted", "!=", true), // Add this condition
       where("timestamp", ">=", startTimestamp),
       where("timestamp", "<", endTimestamp)
     );
@@ -326,37 +265,131 @@ const Header = () => {
       );
       unsubscribeTransactions();
     };
-  }, [
-    currentUser,
-    selectedYear,
-    selectedMonth,
-    accountIncomeData,
-    isLoadingAccounts,
-    selectedFilter,
-  ]);
+  }, [currentUser, accountIncomeData, isLoadingAccounts, startDate, endDate]);
 
-  // --- Date Picker Logic ---
-  const showDatePicker = () => setShowYearPicker(true);
+  useEffect(() => {
+    if (!currentUser) return;
 
-  const hideDatePicker = () => {
-    setShowYearPicker(false);
-    setShowMonthPicker(false);
+    const startTime = new Date(startDate);
+    startTime.setHours(0, 0, 0, 0);
+
+    const endTime = new Date(endDate);
+    endTime.setHours(23, 59, 59, 999);
+
+    const transactionsRef = collection(
+      db,
+      "Accounts",
+      currentUser.uid,
+      "transactions"
+    );
+
+    // Create queries for income and expenses separately
+    const qIncome = query(
+      transactionsRef,
+      where("type", "==", "Income"),
+      where("isDeleted", "!=", true),
+      where("timestamp", ">=", Timestamp.fromDate(startTime)),
+      where("timestamp", "<=", Timestamp.fromDate(endTime))
+    );
+
+    const qExpenses = query(
+      transactionsRef,
+      where("type", "==", "Expenses"),
+      where("isDeleted", "!=", true),
+      where("timestamp", ">=", Timestamp.fromDate(startTime)),
+      where("timestamp", "<=", Timestamp.fromDate(endTime))
+    );
+
+    const unsubIncome = onSnapshot(qIncome, (snapshot) => {
+      const income = snapshot.docs.reduce(
+        (sum, doc) => sum + (doc.data().amount || 0),
+        0
+      );
+      setTotalIncome(income);
+    });
+
+    const unsubExpenses = onSnapshot(qExpenses, (snapshot) => {
+      const expenses = snapshot.docs.reduce(
+        (sum, doc) => sum + (doc.data().amount || 0),
+        0
+      );
+      setTotalExpenses(expenses);
+    });
+
+    return () => {
+      unsubIncome();
+      unsubExpenses();
+    };
+  }, [currentUser, startDate, endDate]);
+
+  const handleDateRangeSelect = (start: Date, end: Date) => {
+    // Calculate the time range type based on selected dates
+    const diffDays = Math.ceil(
+      (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    let newFilter: TimeFilter;
+    if (diffDays <= 1) {
+      newFilter = "Daily";
+    } else if (diffDays <= 7) {
+      newFilter = "Weekly";
+    } else {
+      newFilter = "Monthly";
+    }
+
+    setSelectedFilter(newFilter);
+    updateDateRange(start, end);
+    setShowCalendar(false);
   };
 
-  const handleYearSelect = (year: number) => {
-    setSelectedYear(year);
-    setShowYearPicker(false);
-    setShowMonthPicker(true);
-  };
-
-  const handleMonthSelect = (month: string) => {
-    setSelectedMonth(month);
-    setShowMonthPicker(false);
+  const getDateRangeString = () => {
+    if (startDate && endDate) {
+      return `${format(startDate, "MMM d")} - ${format(
+        endDate,
+        "MMM d, yyyy"
+      )}`;
+    }
+    return selectedDateString;
   };
 
   // --- Filter Modal Logic ---
   const handleFilterSelect = (filter: TimeFilter) => {
+    const now = new Date();
+    let newStartDate: Date;
+    let newEndDate: Date;
+
+    switch (filter) {
+      case "Daily":
+        newStartDate = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate()
+        );
+        newEndDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        break;
+      case "Weekly":
+        const dayOfWeek = now.getDay();
+        newStartDate = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate() - dayOfWeek
+        );
+        newEndDate = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate() + (6 - dayOfWeek)
+        );
+        break;
+      case "Monthly":
+        newStartDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        newEndDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        break;
+      default:
+        return;
+    }
+
     setSelectedFilter(filter);
+    updateDateRange(newStartDate, newEndDate);
     setIsFilterModalVisible(false);
   };
 
@@ -459,29 +492,17 @@ const Header = () => {
           <View style={styles.dateAndFilterContainer}>
             <View style={styles.dateContainer}>
               <TouchableOpacity
-                style={[
-                  styles.dateSelector,
-                  selectedFilter !== "Monthly" && styles.dateSelectorDisabled,
-                ]}
-                onPress={showDatePicker}
-                disabled={selectedFilter !== "Monthly"}
+                style={[styles.dateSelector]}
+                onPress={() => setShowCalendar(true)}
                 activeOpacity={0.7}
               >
-                <Text
-                  style={[
-                    styles.dateText,
-                    selectedFilter !== "Monthly" && styles.dateTextDisabled,
-                  ]}
-                >
-                  {selectedDateString}
-                </Text>
-                {selectedFilter === "Monthly" && (
-                  <Ionicons
-                    name="chevron-down-outline"
-                    size={16}
-                    color="white"
-                  />
-                )}
+                <Ionicons
+                  name="calendar-outline"
+                  size={18}
+                  color="white"
+                  style={styles.calendarIcon}
+                />
+                <Text style={styles.dateText}>{getDateRangeString()}</Text>
               </TouchableOpacity>
             </View>
 
@@ -494,95 +515,13 @@ const Header = () => {
         <View style={styles.dataContainer}>{renderTotals()}</View>
       </View>
 
-      {showYearPicker && (
-        <Modal transparent animationType="fade" onRequestClose={hideDatePicker}>
-          <TouchableWithoutFeedback onPress={hideDatePicker}>
-            <View style={styles.pickerModalContainer}>
-              <TouchableWithoutFeedback>
-                <View style={styles.pickerContent}>
-                  <Text style={styles.pickerTitle}>Select Year</Text>
-                  <FlatList
-                    data={years.map(String)}
-                    renderItem={({ item }) => (
-                      <TouchableOpacity
-                        style={[
-                          styles.pickerItem,
-                          selectedYear === parseInt(item, 10) &&
-                            styles.pickerItemSelected,
-                        ]}
-                        onPress={() => handleYearSelect(parseInt(item, 10))}
-                        activeOpacity={0.7}
-                      >
-                        <Text
-                          style={[
-                            styles.pickerText,
-                            selectedYear === parseInt(item, 10) &&
-                              styles.pickerTextSelected,
-                          ]}
-                        >
-                          {item}
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                    keyExtractor={(item) => item}
-                  />
-                  <TouchableOpacity
-                    style={styles.pickerButton}
-                    onPress={hideDatePicker}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.pickerButtonText}>Cancel</Text>
-                  </TouchableOpacity>
-                </View>
-              </TouchableWithoutFeedback>
-            </View>
-          </TouchableWithoutFeedback>
-        </Modal>
-      )}
-
-      {showMonthPicker && (
-        <Modal transparent animationType="fade" onRequestClose={hideDatePicker}>
-          <TouchableWithoutFeedback onPress={hideDatePicker}>
-            <View style={styles.pickerModalContainer}>
-              <TouchableWithoutFeedback>
-                <View style={styles.pickerContent}>
-                  <Text style={styles.pickerTitle}>Select Month</Text>
-                  <FlatList
-                    data={monthsArray}
-                    renderItem={({ item }) => (
-                      <TouchableOpacity
-                        style={[
-                          styles.pickerItem,
-                          selectedMonth === item && styles.pickerItemSelected,
-                        ]}
-                        onPress={() => handleMonthSelect(item)}
-                        activeOpacity={0.7}
-                      >
-                        <Text
-                          style={[
-                            styles.pickerText,
-                            selectedMonth === item && styles.pickerTextSelected,
-                          ]}
-                        >
-                          {item}
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                    keyExtractor={(item) => item}
-                  />
-                  <TouchableOpacity
-                    style={styles.pickerButton}
-                    onPress={hideDatePicker}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.pickerButtonText}>Cancel</Text>
-                  </TouchableOpacity>
-                </View>
-              </TouchableWithoutFeedback>
-            </View>
-          </TouchableWithoutFeedback>
-        </Modal>
-      )}
+      <CalendarRangeModal
+        visible={showCalendar}
+        onClose={() => setShowCalendar(false)}
+        onSelect={handleDateRangeSelect}
+        startDate={startDate}
+        endDate={endDate}
+      />
 
       {isFilterModalVisible && (
         <Modal
@@ -594,42 +533,39 @@ const Header = () => {
             onPress={() => setIsFilterModalVisible(false)}
           >
             <View style={styles.pickerModalContainer}>
-              <TouchableWithoutFeedback>
-                <View style={styles.pickerContent}>
-                  <Text style={styles.pickerTitle}>Select Time Filter</Text>
-                  {(["Daily", "Weekly", "Monthly"] as TimeFilter[]).map(
-                    (filter) => (
-                      <TouchableOpacity
-                        key={filter}
+              <View style={styles.pickerContent}>
+                <Text style={styles.pickerTitle}>Select Time Filter</Text>
+                {(["Daily", "Weekly", "Monthly"] as TimeFilter[]).map(
+                  (filter) => (
+                    <TouchableOpacity
+                      key={filter}
+                      style={[
+                        styles.pickerItem,
+                        selectedFilter === filter && styles.pickerItemSelected,
+                      ]}
+                      onPress={() => handleFilterSelect(filter)}
+                      activeOpacity={0.7}
+                    >
+                      <Text
                         style={[
-                          styles.pickerItem,
+                          styles.pickerText,
                           selectedFilter === filter &&
-                            styles.pickerItemSelected,
+                            styles.pickerTextSelected,
                         ]}
-                        onPress={() => handleFilterSelect(filter)}
-                        activeOpacity={0.7}
                       >
-                        <Text
-                          style={[
-                            styles.pickerText,
-                            selectedFilter === filter &&
-                              styles.pickerTextSelected,
-                          ]}
-                        >
-                          {filter}
-                        </Text>
-                      </TouchableOpacity>
-                    )
-                  )}
-                  <TouchableOpacity
-                    style={styles.pickerButton}
-                    onPress={() => setIsFilterModalVisible(false)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.pickerButtonText}>Cancel</Text>
-                  </TouchableOpacity>
-                </View>
-              </TouchableWithoutFeedback>
+                        {filter}
+                      </Text>
+                    </TouchableOpacity>
+                  )
+                )}
+                <TouchableOpacity
+                  style={styles.pickerButton}
+                  onPress={() => setIsFilterModalVisible(false)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.pickerButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </TouchableWithoutFeedback>
         </Modal>
@@ -693,19 +629,26 @@ const styles = StyleSheet.create({
   dateSelector: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
     backgroundColor: "rgba(255, 255, 255, 0.2)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.3)",
+    minWidth: 180, // Add this to accommodate longer date ranges
   },
   dateSelectorDisabled: {
     backgroundColor: "rgba(255, 255, 255, 0.1)",
+    borderColor: "rgba(255, 255, 255, 0.1)",
   },
   dateText: {
     color: "white",
-    marginRight: 6,
+    marginHorizontal: 6,
     fontSize: 14,
     fontWeight: "600",
+  },
+  calendarIcon: {
+    marginRight: 2,
   },
   dateTextDisabled: {
     color: "rgba(255, 255, 255, 0.6)",

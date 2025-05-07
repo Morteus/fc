@@ -3,6 +3,7 @@ import BottomNavigationBar from "@/components/botnavigationbar";
 import HeaderTopNav from "@/components/headertopnav";
 import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import { format } from "date-fns"; // Add this import
 import { getAuth, onAuthStateChanged, User } from "firebase/auth"; // Import getAuth
 import {
   collection,
@@ -115,10 +116,16 @@ const ExpandedTransactionList = ({
   );
 };
 
-function AnalysisScreen() {
+const AnalysisScreen = () => {
   const navigation = useNavigation();
-  const { selectedYear, selectedMonth, selectedFilter, selectedCurrency } =
-    useDateContext(); // Add selectedFilter
+  const {
+    selectedYear,
+    selectedMonth,
+    selectedFilter,
+    selectedCurrency,
+    startDate,
+    endDate,
+  } = useDateContext(); // Add selectedFilter and date range
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [expenseTransactions, setExpenseTransactions] = useState<Transaction[]>(
@@ -156,65 +163,14 @@ function AnalysisScreen() {
     setLoading(true);
     setError(null);
     setExpenseTransactions([]);
-    setExpandedCategory(null);
 
-    // --- Calculate start and end dates based on selectedFilter ---
-    let startDate: Date;
-    let endDate: Date;
-    const now = new Date();
-    const monthNumber = getMonthNumber(selectedMonth);
+    const startTime = new Date(startDate);
+    startTime.setHours(0, 0, 0, 0);
 
-    if (selectedFilter === "Daily") {
-      startDate = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate(),
-        0,
-        0,
-        0
-      );
-      endDate = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate() + 1,
-        0,
-        0,
-        0
-      );
-    } else if (selectedFilter === "Weekly") {
-      const dayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
-      startDate = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate() - dayOfWeek, // Start of the current week (Sunday)
-        0,
-        0,
-        0
-      );
-      endDate = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate() + (7 - dayOfWeek), // End of the current week (next Sunday)
-        0,
-        0,
-        0
-      );
-    } else {
-      // Monthly (default)
-      if (monthNumber < 0) {
-        setError("Invalid month selected.");
-        setLoading(false);
-        return;
-      }
-      startDate = new Date(selectedYear, monthNumber, 1, 0, 0, 0);
-      endDate = new Date(selectedYear, monthNumber + 1, 1, 0, 0, 0);
-    }
-    // --- End date calculation ---
+    const endTime = new Date(endDate);
+    endTime.setHours(23, 59, 59, 999);
 
-    const startTimestamp = Timestamp.fromDate(startDate);
-    const endTimestamp = Timestamp.fromDate(endDate);
-
-    const transactionsCollectionRef = collection(
+    const transactionsRef = collection(
       db,
       "Accounts",
       currentUser.uid,
@@ -222,17 +178,19 @@ function AnalysisScreen() {
     );
 
     const q = query(
-      transactionsCollectionRef,
+      transactionsRef,
       where("type", "==", "Expenses"),
-      where("timestamp", ">=", startTimestamp),
-      where("timestamp", "<", endTimestamp),
+      where("isDeleted", "!=", true),
+      where("timestamp", ">=", Timestamp.fromDate(startTime)),
+      where("timestamp", "<=", Timestamp.fromDate(endTime)),
       orderBy("timestamp", "desc")
     );
 
-    console.log(
-      // Updated log message
-      `Analysis: Fetching expenses from ${startDate.toISOString()} to ${endDate.toISOString()}`
-    );
+    console.log("Fetching expenses with params:", {
+      startTime: startTime.toISOString(),
+      endTime: endTime.toISOString(),
+      userId: currentUser.uid,
+    });
 
     const unsubscribe = onSnapshot(
       q,
@@ -240,55 +198,34 @@ function AnalysisScreen() {
         const fetchedExpenses: Transaction[] = [];
         querySnapshot.forEach((doc) => {
           const data = doc.data();
-          if (
-            data &&
-            data.type === "Expenses" &&
-            typeof data.categoryName === "string" &&
-            typeof data.categoryIcon === "string" &&
-            typeof data.amount === "number" &&
-            data.timestamp instanceof Timestamp &&
-            (typeof data.accountId === "string" || data.accountId === null)
-          ) {
+          if (data && data.type === "Expenses") {
             fetchedExpenses.push({
               id: doc.id,
               type: data.type,
-              categoryName: data.categoryName,
-              categoryIcon:
-                (data.categoryIcon as keyof typeof MaterialCommunityIcons.glyphMap) ||
-                "help-circle-outline",
-              amount: data.amount,
+              categoryName: data.categoryName || "Unknown Category",
+              categoryIcon: data.categoryIcon || "help-circle-outline",
+              amount: Number(data.amount) || 0,
               timestamp: data.timestamp,
               accountId: data.accountId,
-              accountName: data.accountName || "Unknown",
-              description: data.description || undefined,
+              accountName: data.accountName || "Unknown Account",
+              description: data.description,
             });
-          } else {
-            console.warn(
-              `Analysis: Invalid expense data found: ${doc.id}`,
-              data
-            );
           }
         });
+
+        console.log(`Found ${fetchedExpenses.length} expense transactions`);
         setExpenseTransactions(fetchedExpenses);
         setLoading(false);
       },
-      (err) => {
-        console.error("Analysis: Error fetching expenses: ", err);
-        setError("Failed to load expense analysis.");
-        if (err.code === "permission-denied") {
-          setError("Permission denied. Check Firestore rules.");
-        } else if (err.code === "failed-precondition") {
-          setError(
-            "Query requires an index. Check Firestore console for index creation link."
-          );
-          console.error("Firestore Index Required:", err.message);
-        }
+      (error) => {
+        console.error("Error fetching expenses:", error);
+        setError("Failed to load expense data: " + error.message);
         setLoading(false);
       }
     );
 
     return () => unsubscribe();
-  }, [currentUser, selectedYear, selectedMonth, selectedFilter]); // Add selectedFilter dependency
+  }, [currentUser, startDate, endDate]);
 
   useEffect(() => {
     if (loading || expenseTransactions.length === 0) {
@@ -466,11 +403,13 @@ function AnalysisScreen() {
         <View style={styles.centeredStateContainer}>
           <MaterialIcons name="bar-chart" size={40} color="#888" />
           <Text style={styles.centeredStateText}>
-            No expense data found for
+            No expense data found for selected date range
           </Text>
-          <Text style={styles.centeredStateText}>
-            {selectedMonth} {selectedYear}.
-          </Text>
+          {startDate && endDate && (
+            <Text style={styles.centeredStateText}>
+              {format(startDate, "MMM d")} - {format(endDate, "MMM d, yyyy")}
+            </Text>
+          )}
         </View>
       );
     }
@@ -541,7 +480,7 @@ function AnalysisScreen() {
       <BottomNavigationBar />
     </>
   );
-}
+};
 
 const styles = StyleSheet.create({
   safeAreaContainer: {

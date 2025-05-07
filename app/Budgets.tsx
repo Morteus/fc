@@ -10,6 +10,7 @@ import {
   onSnapshot,
   orderBy,
   query,
+  serverTimestamp,
   Timestamp,
   updateDoc,
   where,
@@ -58,6 +59,8 @@ interface BudgetDefinition {
   categoryName: string;
   limit: number;
   icon?: keyof typeof MaterialCommunityIcons.glyphMap;
+  resetPeriod: "Daily" | "Weekly" | "Monthly"; // Add reset period
+  lastResetDate: Timestamp; // Track last reset
 }
 
 interface Transaction {
@@ -144,6 +147,10 @@ const BudgetsScreen = () => {
   const [notifiedExceededCategories, setNotifiedExceededCategories] = useState<
     Set<string>
   >(new Set());
+
+  const [selectedResetPeriod, setSelectedResetPeriod] = useState<
+    "Daily" | "Weekly" | "Monthly"
+  >("Monthly");
 
   const navigateToTransaction = () => {
     navigation.navigate("transactions" as never);
@@ -474,6 +481,17 @@ const BudgetsScreen = () => {
     notifiedExceededCategories,
   ]);
 
+  const checkBudgetAlert = (spending: number, limit: number) => {
+    const percentage = (spending / limit) * 100;
+    if (percentage >= 100) {
+      Alert.alert("Budget Exceeded!", "You have exceeded your budget limit.");
+    } else if (percentage >= 90) {
+      Alert.alert("Budget Alert", "You are at 90% of your budget limit!");
+    } else if (percentage >= 75) {
+      Alert.alert("Budget Warning", "You are at 75% of your budget limit.");
+    }
+  };
+
   const openModalForCategory = (item: BudgetDisplayData) => {
     setSelectedCategoryName(item.categoryName);
     setIsEditMode(!!item.budgetId);
@@ -533,6 +551,8 @@ const BudgetsScreen = () => {
       categoryName: selectedCategoryName,
       limit: limitValue,
       icon: categoryInfo.icon,
+      resetPeriod: selectedResetPeriod,
+      lastResetDate: serverTimestamp(),
     };
     const budgetsColRef = collection(
       db,
@@ -857,6 +877,30 @@ const BudgetsScreen = () => {
                 placeholderTextColor="#999"
                 autoFocus={true}
               />
+              <Text style={styles.modalLabel}>Reset Period:</Text>
+              <View style={styles.resetPeriodSelector}>
+                {(["Daily", "Weekly", "Monthly"] as const).map((period) => (
+                  <TouchableOpacity
+                    key={period}
+                    style={[
+                      styles.resetPeriodButton,
+                      selectedResetPeriod === period &&
+                        styles.resetPeriodButtonSelected,
+                    ]}
+                    onPress={() => setSelectedResetPeriod(period)}
+                  >
+                    <Text
+                      style={[
+                        styles.resetPeriodText,
+                        selectedResetPeriod === period &&
+                          styles.resetPeriodTextSelected,
+                      ]}
+                    >
+                      {period}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
               <View style={styles.modalButtons}>
                 <TouchableOpacity
                   style={[styles.modalButton, styles.modalCancelButton]}
@@ -1086,6 +1130,32 @@ const styles = StyleSheet.create({
     fontSize: 18,
     backgroundColor: "#f9f9f9",
     color: "#333",
+  },
+  resetPeriodSelector: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 20,
+  },
+  resetPeriodButton: {
+    flex: 1,
+    padding: 12,
+    marginHorizontal: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    alignItems: "center",
+  },
+  resetPeriodButtonSelected: {
+    backgroundColor: "#006400",
+    borderColor: "#006400",
+  },
+  resetPeriodText: {
+    fontSize: 14,
+    color: "#333",
+  },
+  resetPeriodTextSelected: {
+    color: "#fff",
+    fontWeight: "bold",
   },
   modalButtons: {
     flexDirection: "row",

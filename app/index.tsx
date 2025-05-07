@@ -1,9 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useRouter } from "expo-router"; // Import Stack for header config
 import { StatusBar } from "expo-status-bar";
-import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
-import { useEffect, useState } from "react";
+import {
+  // getAuth, // No longer needed here
+  signInWithEmailAndPassword, // Only need Sign In for this screen
+} from "firebase/auth";
+import { useState } from "react";
 import {
   ActivityIndicator,
   Keyboard,
@@ -18,107 +20,79 @@ import {
   View,
 } from "react-native";
 
-import { auth } from "./firebase";
+import { auth } from "./firebase"; // <-- Import initialized auth instance
+
+const getFirebaseAuthErrorMessage = (
+  errorCode: string,
+  defaultMessage: string
+): string => {
+  switch (errorCode) {
+    case "auth/invalid-email":
+      return "Please enter a valid email address.";
+    case "auth/user-disabled":
+      return "This account has been disabled.";
+    case "auth/user-not-found":
+      return "No account found with this email.";
+    case "auth/wrong-password":
+      return "Invalid password.";
+    case "auth/too-many-requests":
+      return "Too many failed attempts. Please try again later.";
+    default:
+      return defaultMessage || "An error occurred during sign in.";
+  }
+};
 
 const LoginScreen = () => {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null); // State for inline errors
   const [showPassword, setShowPassword] = useState(false);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        // Store user data in AsyncStorage
-        await AsyncStorage.setItem("user", JSON.stringify(user));
-        router.replace("/record");
-      } else {
-        // Check AsyncStorage for existing session
-        try {
-          const storedUser = await AsyncStorage.getItem("user");
-          if (storedUser) {
-            router.replace("/record");
-          }
-        } catch (error) {
-          console.log("Error checking stored user:", error);
-        }
-      }
-      setIsLoading(false);
-    });
-
-    return unsubscribe;
-  }, [router]);
-
-  const handleLogin = () => {
-    Keyboard.dismiss();
-    setError(null);
-
-    const trimmedEmail = email.trim();
-    if (!trimmedEmail || !password) {
-      setError("Please enter both email and password.");
-      return;
-    }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(trimmedEmail)) {
-      setError("Please enter a valid email address.");
+  // --- Email/Password Login Handler ---
+  const handleLogin = async () => {
+    if (!email || !password) {
+      setError("Please fill in all fields");
       return;
     }
 
     setIsLoading(true);
+    try {
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
 
-    signInWithEmailAndPassword(auth, trimmedEmail, password)
-      .then(async (userCredential) => {
-        // Store user data in AsyncStorage
-        await AsyncStorage.setItem("user", JSON.stringify(userCredential.user));
-        router.replace("/record");
-      })
-      .catch((error) => {
-        console.error("Login Error:", error.code, error.message);
-        let errorMessage = "An unexpected error occurred during login.";
-        switch (error.code) {
-          case "auth/user-not-found":
-          case "auth/wrong-password":
-          case "auth/invalid-credential":
-            errorMessage = "Invalid email or password.";
-            break;
-          case "auth/invalid-email":
-            errorMessage = "Please enter a valid email address.";
-            break;
-          case "auth/user-disabled":
-            errorMessage = "This user account has been disabled.";
-            break;
-          case "auth/too-many-requests":
-            errorMessage =
-              "Access temporarily disabled due to too many failed login attempts. Please reset your password or try again later.";
-            break;
-          default:
-            errorMessage = `Login failed: ${error.message}`;
-        }
-        setError(errorMessage);
-      })
-      .finally(() => setIsLoading(false));
+      if (!userCredential.user.emailVerified) {
+        await auth.signOut();
+        setError("Please verify your email before logging in.");
+        return;
+      }
+
+      // Continue with successful login
+      router.replace("/record"); // Changed from "/home" to "/record"
+    } catch (error: any) {
+      console.error(error);
+      setError(getFirebaseAuthErrorMessage(error.code, error.message));
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const togglePasswordVisibility = () => {
     setShowPassword(!showPassword);
   };
 
-  if (isLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#B58900" />
-      </View>
-    );
-  }
-
+  // --- Render UI ---
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={styles.keyboardAvoidingContainer}
     >
       <StatusBar style="dark" />
+      {/* Hide the header for the login screen */}
       <Stack.Screen options={{ headerShown: false }} />
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <ScrollView
@@ -126,20 +100,25 @@ const LoginScreen = () => {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.innerContainer}>
+            {/* Logo Placeholder */}
             <View style={styles.logoContainer}>
               <View style={styles.logoPlaceholder}>
                 <Text style={styles.logoText}>FC</Text>
               </View>
             </View>
 
+            {/* Title and Subtitle */}
             <Text style={styles.title}>Welcome Back</Text>
             <Text style={styles.subtitle}>
               Sign in to continue your financial journey
             </Text>
 
+            {/* Display Error Message */}
             {error && <Text style={styles.errorText}>{error}</Text>}
 
+            {/* Form Container */}
             <View style={styles.formContainer}>
+              {/* Email Input */}
               <View style={styles.inputContainer}>
                 <View style={styles.iconContainer}>
                   <Ionicons name="mail-outline" size={20} color="#555" />
@@ -157,6 +136,7 @@ const LoginScreen = () => {
                 />
               </View>
 
+              {/* Password Input */}
               <View style={styles.inputContainer}>
                 <View style={styles.iconContainer}>
                   <Ionicons name="lock-closed-outline" size={20} color="#555" />
@@ -183,6 +163,7 @@ const LoginScreen = () => {
                 </TouchableOpacity>
               </View>
 
+              {/* Forgot Password Link */}
               <TouchableOpacity
                 activeOpacity={0.8}
                 style={styles.forgotPasswordContainer}
@@ -195,6 +176,7 @@ const LoginScreen = () => {
               </TouchableOpacity>
             </View>
 
+            {/* --- Sign In Button --- */}
             <TouchableOpacity
               activeOpacity={0.8}
               style={[styles.button, isLoading && styles.buttonDisabled]}
@@ -208,6 +190,7 @@ const LoginScreen = () => {
               )}
             </TouchableOpacity>
 
+            {/* --- Navigate to Sign Up Link --- */}
             <View style={styles.signUpContainer}>
               <Text style={styles.signUpText}>Don&apos;t have an account?</Text>
               <TouchableOpacity
@@ -225,6 +208,7 @@ const LoginScreen = () => {
   );
 };
 
+// --- Styles (Adapted and cleaned up) ---
 const styles = StyleSheet.create({
   keyboardAvoidingContainer: {
     flex: 1,
@@ -363,12 +347,6 @@ const styles = StyleSheet.create({
     color: "#006400",
     fontSize: 15,
     fontWeight: "bold",
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
   },
 });
 

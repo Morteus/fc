@@ -372,6 +372,22 @@ const ProfilePage = () => {
           </TouchableOpacity>
         </View>
 
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Records Management</Text>
+          <TouchableOpacity
+            style={styles.listItem}
+            onPress={() => router.push("/deletedrecords")}
+            disabled={!currentUser || isLoading}
+          >
+            <Text style={styles.listItemText}>Deleted Records</Text>
+            <Ionicons
+              name="chevron-forward-outline"
+              size={20}
+              color="#006400"
+            />
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.logoutContainer}>
           <TouchableOpacity
             style={[styles.logoutButton, !currentUser && styles.disabledButton]}

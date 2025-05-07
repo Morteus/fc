@@ -4,15 +4,19 @@ import { useRouter } from "expo-router";
 import { onAuthStateChanged, User } from "firebase/auth";
 import {
   collection,
+  doc,
   onSnapshot,
   orderBy,
   query,
+  serverTimestamp,
   Timestamp,
+  updateDoc,
   where,
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -54,28 +58,9 @@ const formatFirestoreTimestamp = (
   }
 };
 
-const getMonthNumber = (monthName: string): number => {
-  const months = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
-  return months.indexOf(monthName);
-};
-
 const HistoryScreen = () => {
   const router = useRouter();
-  const { selectedYear, selectedMonth, selectedFilter, selectedCurrency } =
-    useDateContext();
+  const { startDate, endDate, selectedCurrency } = useDateContext();
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -106,136 +91,94 @@ const HistoryScreen = () => {
     setError(null);
     setTransactions([]);
 
-    // --- Calculate start and end dates based on selectedFilter ---
-    let startDate: Date;
-    let endDate: Date;
-    const now = new Date();
-    const monthNumber = getMonthNumber(selectedMonth);
+    const startTime = new Date(startDate);
+    startTime.setHours(0, 0, 0, 0);
 
-    if (selectedFilter === "Daily") {
-      startDate = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate(),
-        0,
-        0,
-        0
-      );
-      endDate = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate() + 1,
-        0,
-        0,
-        0
-      );
-    } else if (selectedFilter === "Weekly") {
-      const dayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
-      startDate = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate() - dayOfWeek, // Start of the current week (Sunday)
-        0,
-        0,
-        0
-      );
-      endDate = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate() + (7 - dayOfWeek), // End of the current week (next Sunday)
-        0,
-        0,
-        0
-      );
-    } else {
-      // Monthly (default)
-      if (monthNumber < 0) {
-        setError("Invalid month selected in context.");
-        setLoading(false);
-        return;
-      }
-      startDate = new Date(selectedYear, monthNumber, 1, 0, 0, 0);
-      endDate = new Date(selectedYear, monthNumber + 1, 1, 0, 0, 0);
-    }
-    // --- End date calculation ---
+    const endTime = new Date(endDate);
+    endTime.setHours(23, 59, 59, 999);
 
-    const startTimestamp = Timestamp.fromDate(startDate);
-    const endTimestamp = Timestamp.fromDate(endDate);
-
-    const transactionsCollectionRef = collection(
+    const transactionsRef = collection(
       db,
       "Accounts",
       currentUser.uid,
       "transactions"
     );
 
+    // Simplified query with proper ordering
     const q = query(
-      transactionsCollectionRef,
-      where("timestamp", ">=", startTimestamp),
-      where("timestamp", "<", endTimestamp),
-      orderBy("timestamp", "desc")
+      transactionsRef,
+      orderBy("timestamp", "desc"),
+      where("timestamp", ">=", Timestamp.fromDate(startTime)),
+      where("timestamp", "<=", Timestamp.fromDate(endTime))
     );
 
-    console.log(
-      `Fetching transactions from ${startDate.toISOString()} to ${endDate.toISOString()}`
-    );
+    console.log("Fetching records for:", {
+      user: currentUser.uid,
+      start: startTime.toISOString(),
+      end: endTime.toISOString(),
+    });
 
     const unsubscribe = onSnapshot(
       q,
-      (querySnapshot) => {
-        const fetchedTransactions: Transaction[] = [];
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
-          if (
-            data &&
-            typeof data.type === "string" &&
-            typeof data.categoryName === "string" &&
-            typeof data.categoryIcon === "string" &&
-            typeof data.amount === "number" &&
-            data.timestamp instanceof Timestamp &&
-            (typeof data.accountId === "string" || data.accountId === null)
-          ) {
-            fetchedTransactions.push({
-              id: doc.id,
-              type: data.type as "Income" | "Expenses",
-              categoryName: data.categoryName,
-              categoryIcon:
-                (data.categoryIcon as keyof typeof MaterialCommunityIcons.glyphMap) ||
-                "help-circle-outline",
-              amount: data.amount,
-              timestamp: data.timestamp,
-              accountId: data.accountId,
-              accountName: data.accountName || "Unknown Account",
-            });
-          } else {
-            console.warn(`Invalid transaction data found: ${doc.id}`, data);
-          }
-        });
+      (snapshot) => {
+        const fetchedTransactions = snapshot.docs
+          .filter((doc) => !doc.data().isDeleted) // Filter deleted items in JS
+          .map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+            timestamp: doc.data().timestamp,
+          })) as Transaction[];
+
+        console.log(`Found ${fetchedTransactions.length} transactions`);
         setTransactions(fetchedTransactions);
         setLoading(false);
       },
-      (err) => {
-        console.error("Error fetching transactions: ", err);
-        setError("Failed to load transaction history.");
-        if (err.code === "permission-denied") {
-          setError("Permission denied. Check Firestore rules.");
-        } else if (err.code === "failed-precondition") {
-          setError(
-            "Query requires an index. Check Firestore console for index creation link."
-          );
-          console.error("Firestore Index Required:", err.message);
-        }
+      (error) => {
+        console.error("Error fetching transactions:", error);
+        setError(error.message);
         setLoading(false);
       }
     );
 
-    return () => {
-      console.log(
-        `RecordScreen: Unsubscribing from transaction listener for ${currentUser?.uid}`
-      );
-      unsubscribe();
-    };
-  }, [currentUser, selectedYear, selectedMonth, selectedFilter]);
+    return () => unsubscribe();
+  }, [currentUser, startDate, endDate]);
+
+  const handleDeleteTransaction = (transaction: Transaction) => {
+    Alert.alert(
+      "Delete Transaction",
+      "This transaction will be moved to deleted records. You can restore it later from your profile page.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Move to Deleted",
+          style: "destructive",
+          onPress: async () => {
+            if (!currentUser) return;
+            try {
+              const transactionRef = doc(
+                db,
+                "Accounts",
+                currentUser.uid,
+                "transactions",
+                transaction.id
+              );
+              await updateDoc(transactionRef, {
+                isDeleted: true,
+                deletedAt: serverTimestamp(),
+              });
+              Alert.alert(
+                "Success",
+                "Transaction moved to deleted records. You can restore it from your profile page."
+              );
+            } catch (error) {
+              console.error("Error deleting transaction:", error);
+              Alert.alert("Error", "Failed to delete transaction");
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const renderContent = () => {
     if (!currentUser && !loading) {
@@ -255,15 +198,7 @@ const HistoryScreen = () => {
       return (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color="#B58900" />
-          <Text style={styles.loadingText}>
-            Loading Records for{" "}
-            {selectedFilter === "Daily"
-              ? "Today"
-              : selectedFilter === "Weekly"
-              ? "This Week"
-              : `${selectedMonth} ${selectedYear}`}
-            ...
-          </Text>
+          <Text style={styles.loadingText}>Loading Records...</Text>
         </View>
       );
     }
@@ -292,15 +227,7 @@ const HistoryScreen = () => {
           <View style={styles.emptyStateContainer}>
             <MaterialIcons name="hourglass-empty" size={64} color="#ccc" />
             <Text style={styles.emptyStateTitle}>No Transactions</Text>
-            <Text style={styles.emptyStateText}>
-              No transactions recorded for{" "}
-              {selectedFilter === "Daily"
-                ? "Today"
-                : selectedFilter === "Weekly"
-                ? "This Week"
-                : `${selectedMonth} ${selectedYear}`}
-              .
-            </Text>
+            <Text style={styles.emptyStateText}>No transactions recorded.</Text>
             <Text style={styles.emptyStateAction}>
               Tap &apos;+&apos; to add one!
             </Text>
@@ -332,6 +259,7 @@ const HistoryScreen = () => {
                   key={transaction.id}
                   style={styles.transactionItem}
                   activeOpacity={0.8}
+                  onLongPress={() => handleDeleteTransaction(transaction)}
                 >
                   <View style={styles.transactionDetails}>
                     <View

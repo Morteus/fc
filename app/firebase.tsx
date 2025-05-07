@@ -1,13 +1,7 @@
-import { initializeApp, getApps, getApp } from "firebase/app";
-import {
-  getAuth,
-  Auth, // <-- Import the Auth type
-  initializeAuth,
-  // indexedDBLocalPersistence, // <-- Not needed for React Native
-  // browserLocalPersistence, // <-- Not needed for React Native
-} from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getApp, getApps, initializeApp } from "firebase/app";
+import { Auth, getAuth, initializeAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 
 // Firebase configuration
 const firebaseConfig = {
@@ -23,21 +17,16 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-// Initialize Auth
-// React Native specific approach
-let auth: Auth; // <-- Explicitly type auth as Auth
+let auth: Auth;
 try {
-  // Try to use React Native specific persistence
   const { getReactNativePersistence } = require("firebase/auth/react-native");
   auth = initializeAuth(app, {
     persistence: getReactNativePersistence(AsyncStorage),
   });
 } catch (error) {
-  // Fallback to standard auth if React Native persistence is not available
   auth = getAuth(app);
 }
 
-// Initialize Firestore
 const db = getFirestore(app);
 
 export { app, auth, db };

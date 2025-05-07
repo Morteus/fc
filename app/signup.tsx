@@ -2,7 +2,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { createUserWithEmailAndPassword, User } from "firebase/auth";
+import {
+  createUserWithEmailAndPassword,
+  sendEmailVerification,
+  User,
+} from "firebase/auth";
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { useState } from "react";
 import {
@@ -95,28 +99,37 @@ const SignUpScreen = () => {
   };
 
   const handleSignUp = async () => {
-    setError(null);
-    Keyboard.dismiss();
     if (!validateInputs()) return;
     setIsLoading(true);
-    const trimmedEmail = email.trim();
+    setError(null);
 
     try {
       const userCredential = await createUserWithEmailAndPassword(
         auth,
-        trimmedEmail,
+        email.trim(),
         password
       );
-      console.log("Sign Up Successful!", userCredential.user.email);
+
+      await sendEmailVerification(userCredential.user);
       await createUserDocument(userCredential.user);
+
+      // Sign out the user immediately after creation
+      await auth.signOut();
+
       Alert.alert(
-        "Sign Up Successful",
-        `Account created for ${trimmedEmail}. You can now log in.`
+        "Email Verification Required",
+        "A verification link has been sent to your email. Please verify your email before logging in.",
+        [
+          {
+            text: "OK",
+            onPress: () => {
+              router.replace("/"); // Always redirect to login after signup
+            },
+          },
+        ]
       );
-      if (router.canGoBack()) router.back();
-      else router.replace("/");
     } catch (error: any) {
-      console.error("Sign Up Error:", error.code, error.message);
+      console.error("Error:", error);
       setError(getFirebaseAuthErrorMessage(error.code, error.message));
     } finally {
       setIsLoading(false);
@@ -137,147 +150,153 @@ const SignUpScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.keyboardAvoidingContainer}
-      >
-        <Stack.Screen options={{ headerShown: false }} />
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <ScrollView
-            contentContainerStyle={styles.scrollContainer}
-            keyboardShouldPersistTaps="handled"
-          >
-            <View style={styles.innerContainer}>
-              {/* Logo Placeholder */}
-              <View style={styles.logoContainer}>
-                <View style={styles.logoPlaceholder}>
-                  <Text style={styles.logoText}>FC</Text>
-                </View>
-              </View>
-
-              <Text style={styles.title}>Create Account</Text>
-              <Text style={styles.subtitle}>
-                Join us to manage your finances better and track your progress.
-              </Text>
-
-              {error && <Text style={styles.errorText}>{error}</Text>}
-
-              {/* Form Container */}
-              <View style={styles.formContainer}>
-                {/* Email Input */}
-                <View style={styles.inputContainer}>
-                  <View style={styles.iconContainer}>
-                    <Ionicons name="mail-outline" size={20} color="#555" />
+    <>
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar style="dark" />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.keyboardAvoidingContainer}
+        >
+          <Stack.Screen options={{ headerShown: false }} />
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <ScrollView
+              contentContainerStyle={styles.scrollContainer}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={styles.innerContainer}>
+                {/* Logo Placeholder */}
+                <View style={styles.logoContainer}>
+                  <View style={styles.logoPlaceholder}>
+                    <Text style={styles.logoText}>FC</Text>
                   </View>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Email"
-                    keyboardType="email-address"
-                    placeholderTextColor="#888"
-                    value={email}
-                    onChangeText={setEmail}
-                    autoCapitalize="none"
-                    autoComplete="email"
-                    editable={!isLoading}
-                  />
                 </View>
 
-                {/* Password Input */}
-                <View style={styles.inputContainer}>
-                  <View style={styles.iconContainer}>
-                    <Ionicons
-                      name="lock-closed-outline"
-                      size={20}
-                      color="#555"
+                <Text style={styles.title}>Create Account</Text>
+                <Text style={styles.subtitle}>
+                  Join us to manage your finances better and track your
+                  progress.
+                </Text>
+
+                {error && <Text style={styles.errorText}>{error}</Text>}
+
+                {/* Form Container */}
+                <View style={styles.formContainer}>
+                  {/* Email Input */}
+                  <View style={styles.inputContainer}>
+                    <View style={styles.iconContainer}>
+                      <Ionicons name="mail-outline" size={20} color="#555" />
+                    </View>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Email"
+                      keyboardType="email-address"
+                      placeholderTextColor="#888"
+                      value={email}
+                      onChangeText={setEmail}
+                      autoCapitalize="none"
+                      autoComplete="email"
+                      editable={!isLoading}
                     />
                   </View>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Password"
-                    secureTextEntry={!showPassword}
-                    placeholderTextColor="#888"
-                    value={password}
-                    onChangeText={setPassword}
-                    autoComplete="new-password"
-                    editable={!isLoading}
-                  />
+
+                  {/* Password Input */}
+                  <View style={styles.inputContainer}>
+                    <View style={styles.iconContainer}>
+                      <Ionicons
+                        name="lock-closed-outline"
+                        size={20}
+                        color="#555"
+                      />
+                    </View>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Password"
+                      secureTextEntry={!showPassword}
+                      placeholderTextColor="#888"
+                      value={password}
+                      onChangeText={setPassword}
+                      autoComplete="new-password"
+                      editable={!isLoading}
+                    />
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      style={styles.eyeIcon}
+                      onPress={togglePasswordVisibility}
+                    >
+                      <Ionicons
+                        name={showPassword ? "eye-off-outline" : "eye-outline"}
+                        size={22}
+                        color="#555"
+                      />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Confirm Password Input */}
+                  <View style={styles.inputContainer}>
+                    <View style={styles.iconContainer}>
+                      <Ionicons
+                        name="shield-checkmark-outline"
+                        size={20}
+                        color="#555"
+                      />
+                    </View>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Confirm Password"
+                      secureTextEntry={!showConfirmPassword}
+                      placeholderTextColor="#888"
+                      value={confirmPassword}
+                      onChangeText={setConfirmPassword}
+                      editable={!isLoading}
+                    />
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      style={styles.eyeIcon}
+                      onPress={toggleConfirmPasswordVisibility}
+                    >
+                      <Ionicons
+                        name={
+                          showConfirmPassword
+                            ? "eye-off-outline"
+                            : "eye-outline"
+                        }
+                        size={22}
+                        color="#555"
+                      />
+                    </TouchableOpacity>
+                  </View>
+
                   <TouchableOpacity
-                    activeOpacity={0.8}
-                    style={styles.eyeIcon}
-                    onPress={togglePasswordVisibility}
+                    style={[styles.button, isLoading && styles.buttonDisabled]}
+                    onPress={handleSignUp}
+                    disabled={isLoading}
                   >
-                    <Ionicons
-                      name={showPassword ? "eye-off-outline" : "eye-outline"}
-                      size={22}
-                      color="#555"
-                    />
+                    {isLoading ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text style={styles.buttonText}>Sign Up</Text>
+                    )}
                   </TouchableOpacity>
                 </View>
 
-                {/* Confirm Password Input */}
-                <View style={styles.inputContainer}>
-                  <View style={styles.iconContainer}>
-                    <Ionicons
-                      name="shield-checkmark-outline"
-                      size={20}
-                      color="#555"
-                    />
-                  </View>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Confirm Password"
-                    secureTextEntry={!showConfirmPassword}
-                    placeholderTextColor="#888"
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
-                    editable={!isLoading}
-                  />
+                {/* Login Link */}
+                <View style={styles.loginContainer}>
+                  <Text style={styles.loginText}>
+                    Already have an account?{" "}
+                  </Text>
                   <TouchableOpacity
-                    activeOpacity={0.8}
-                    style={styles.eyeIcon}
-                    onPress={toggleConfirmPasswordVisibility}
+                    onPress={navigateToLogin}
+                    disabled={isLoading}
                   >
-                    <Ionicons
-                      name={
-                        showConfirmPassword ? "eye-off-outline" : "eye-outline"
-                      }
-                      size={22}
-                      color="#555"
-                    />
+                    <Text style={styles.loginLink}>Sign In</Text>
                   </TouchableOpacity>
                 </View>
               </View>
-
-              {/* Sign Up Button */}
-              <TouchableOpacity
-                style={[styles.button, isLoading && styles.buttonDisabled]}
-                onPress={handleSignUp}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.buttonText}>Create Account</Text>
-                )}
-              </TouchableOpacity>
-
-              {/* Login Link */}
-              <View style={styles.loginContainer}>
-                <Text style={styles.loginText}>Already have an account? </Text>
-                <TouchableOpacity
-                  onPress={navigateToLogin}
-                  disabled={isLoading}
-                >
-                  <Text style={styles.loginLink}>Sign In</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </ScrollView>
-        </TouchableWithoutFeedback>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+            </ScrollView>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </>
   );
 };
 

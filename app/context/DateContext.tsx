@@ -1,10 +1,10 @@
 // c:\Users\scubo\Downloads\FinClassify-dea0c4be4da0318ed62b8b3aa713817c40b0002f\FinClassifyApp\app\context\DateContext.tsx
 import React, {
   createContext,
-  useState,
+  ReactNode,
   useContext,
   useMemo,
-  ReactNode,
+  useState,
 } from "react";
 
 // Define the type for the filter
@@ -22,6 +22,11 @@ interface DateContextType {
   selectedCurrency: string; // <-- Add selectedCurrency
   setSelectedCurrency: (currency: string) => void; // <-- Add setter for currency
   selectedDateString: string; // Formatted string like "Jan 2024"
+  startDate: Date; // Add startDate
+  setStartDate: (date: Date) => void; // Add setter for startDate
+  endDate: Date; // Add endDate
+  setEndDate: (date: Date) => void; // Add setter for endDate
+  updateDateRange: (start: Date, end: Date) => void; // Add updateDateRange
 }
 
 // Create the context with a default value matching the interface
@@ -37,6 +42,11 @@ const DateContext = createContext<DateContextType>({
   selectedDateString: `${new Date().toLocaleString("default", {
     month: "short",
   })} ${new Date().getFullYear()}`,
+  startDate: new Date(), // Default startDate
+  setStartDate: () => {}, // Default setter for startDate
+  endDate: new Date(), // Default endDate
+  setEndDate: () => {}, // Default setter for endDate
+  updateDateRange: () => {}, // Default updateDateRange
 });
 
 // Create the provider component
@@ -50,6 +60,19 @@ export const DateProvider: React.FC<{ children: ReactNode }> = ({
   const [selectedMonth, setSelectedMonth] = useState(currentMonthName);
   const [selectedFilter, setSelectedFilter] = useState<TimeFilter>("Monthly"); // Add filter state
   const [selectedCurrency, setSelectedCurrency] = useState<string>("PHP"); // <-- Add currency state
+  const [startDate, setStartDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1); // First day of current month
+  });
+  const [endDate, setEndDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth() + 1, 0); // Last day of current month
+  });
+
+  const updateDateRange = (start: Date, end: Date) => {
+    setStartDate(new Date(start.setHours(0, 0, 0, 0)));
+    setEndDate(new Date(end.setHours(23, 59, 59, 999)));
+  };
 
   // Memoize the formatted date string to prevent unnecessary recalculations
   const selectedDateString = useMemo(() => {
@@ -68,6 +91,11 @@ export const DateProvider: React.FC<{ children: ReactNode }> = ({
       setSelectedFilter, // Provide filter setter
       selectedCurrency, // <-- Provide currency state
       setSelectedCurrency, // <-- Provide currency setter
+      startDate, // Provide startDate
+      setStartDate, // Provide setter for startDate
+      endDate, // Provide endDate
+      setEndDate, // Provide setter for endDate
+      updateDateRange, // Provide updateDateRange
     }),
     [
       selectedYear,
@@ -75,6 +103,8 @@ export const DateProvider: React.FC<{ children: ReactNode }> = ({
       selectedDateString,
       selectedFilter,
       selectedCurrency, // <-- Add currency to dependencies
+      startDate, // Add startDate to dependencies
+      endDate, // Add endDate to dependencies
     ]
   );
 

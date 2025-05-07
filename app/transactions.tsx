@@ -1,16 +1,19 @@
 // c:\Users\scubo\OneDrive\Documents\putangina\fc\app\transactions.tsx
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Stack, useNavigation } from "expo-router";
 import { onAuthStateChanged, User } from "firebase/auth";
+
 import {
   addDoc,
   collection,
   doc,
+  getDocs,
   onSnapshot,
   orderBy,
   query,
   runTransaction,
   serverTimestamp,
+  where,
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import {
@@ -30,12 +33,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { auth, db } from "../app/firebase";
 import AddExpenseCategoryModal from "../components/AddExpenseModal";
 import AddIncomeCategoryModal from "../components/AddIncomeModal";
+import { formatCurrency } from "../utils/formatting";
+import { useDateContext } from "./context/DateContext";
 
 // --- Interfaces ---
 interface Category {
   id: string;
   name: string;
-  icon: string;
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
   description?: string | null;
   isDefault?: boolean;
 }
@@ -256,8 +261,102 @@ const suggestCategory = (
   return null;
 };
 
-export default function TransactionScreen() {
+const checkBudgetStatus = async (
+  userId: string,
+  categoryName: string,
+  newExpenseAmount: number,
+  selectedCurrency: string // Add this parameter
+) => {
+  try {
+    // Get the budget for this category
+    const budgetsRef = collection(db, "Accounts", userId, "budgets");
+    const budgetQuery = query(
+      budgetsRef,
+      where("categoryName", "==", categoryName)
+    );
+    const budgetSnap = await getDocs(budgetQuery);
+
+    if (!budgetSnap.empty) {
+      const budgetData = budgetSnap.docs[0].data();
+      const budgetLimit = budgetData.limit;
+
+      // Get current spending for this category
+      const transactionsRef = collection(
+        db,
+        "Accounts",
+        userId,
+        "transactions"
+      );
+      const now = new Date();
+      let startDate: Date;
+
+      // Calculate start date based on reset period
+      switch (budgetData.resetPeriod) {
+        case "Daily":
+          startDate = new Date(now.setHours(0, 0, 0, 0));
+          break;
+        case "Weekly":
+          const day = now.getDay();
+          startDate = new Date(now.setDate(now.getDate() - day));
+          break;
+        case "Monthly":
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+          break;
+        default:
+          startDate = new Date(now.setHours(0, 0, 0, 0));
+      }
+
+      const spendingQuery = query(
+        transactionsRef,
+        where("type", "==", "Expenses"),
+        where("categoryName", "==", categoryName),
+        where("timestamp", ">=", startDate)
+      );
+
+      const spendingSnap = await getDocs(spendingQuery);
+      const currentSpending = spendingSnap.docs.reduce(
+        (sum, doc) => sum + doc.data().amount,
+        0
+      );
+
+      const totalWithNew = currentSpending + newExpenseAmount;
+      const percentageAfterNew = (totalWithNew / budgetLimit) * 100;
+
+      // Return budget status with selectedCurrency parameter
+      if (percentageAfterNew >= 100) {
+        return {
+          status: "exceeded",
+          message: `This expense will exceed your ${categoryName} budget by ${formatCurrency(
+            totalWithNew - budgetLimit,
+            selectedCurrency
+          )}!`,
+        };
+      } else if (percentageAfterNew >= 90) {
+        return {
+          status: "warning",
+          message: `This expense will bring you to ${percentageAfterNew.toFixed(
+            0
+          )}% of your ${categoryName} budget!`,
+        };
+      } else if (percentageAfterNew >= 75) {
+        return {
+          status: "caution",
+          message: `This expense will bring you to ${percentageAfterNew.toFixed(
+            0
+          )}% of your ${categoryName} budget.`,
+        };
+      }
+    }
+    return null;
+  } catch (error) {
+    console.error("Error checking budget status:", error);
+    return null;
+  }
+};
+
+const TransactionScreen = () => {
   const navigation = useNavigation();
+  const { selectedCurrency } = useDateContext();
   const [transactionType, setTransactionType] = useState<"Expenses" | "Income">(
     "Expenses"
   );
@@ -285,6 +384,10 @@ export default function TransactionScreen() {
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(
     null
   );
+  const [isSaving, setIsSaving] = useState(false);
+
+  const [showBudgetWarningModal, setShowBudgetWarningModal] = useState(false);
+  const [budgetWarningMessage, setBudgetWarningMessage] = useState("");
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
@@ -468,6 +571,8 @@ export default function TransactionScreen() {
   };
 
   const handleSaveAmount = async () => {
+    if (isSaving) return;
+
     if (!currentUser) {
       Alert.alert(
         "Login Required",
@@ -475,6 +580,7 @@ export default function TransactionScreen() {
       );
       return;
     }
+
     const userId = currentUser.uid;
     const transactionAmount = parseFloat(amount);
 
@@ -496,12 +602,52 @@ export default function TransactionScreen() {
       }
     }
 
+    // Check budget before proceeding with save
+    if (transactionType === "Expenses") {
+      const budgetStatus = await checkBudgetStatus(
+        userId,
+        categoryToSave.name,
+        transactionAmount,
+        selectedCurrency
+      );
+
+      if (
+        budgetStatus?.status === "exceeded" ||
+        budgetStatus?.status === "warning"
+      ) {
+        setBudgetWarningMessage(budgetStatus.message);
+        setShowBudgetWarningModal(true);
+        return;
+      }
+    }
+
+    // Continue with existing save logic
+    setIsSaving(true);
+    // ...rest of the existing handleSaveAmount function...
+    saveTransaction();
+  };
+
+  const handleConfirmSaveAfterWarning = () => {
+    setShowBudgetWarningModal(false);
+    setIsSaving(true);
+    // Continue with the save operation
+    saveTransaction();
+  };
+
+  // Extract the save transaction logic to a separate function
+  const saveTransaction = async () => {
+    // Move the transaction saving logic here
+    const userId = currentUser!.uid;
+    const transactionAmount = parseFloat(amount);
+    const categoryToSave =
+      selectedCategoryForAmount ||
+      currentCategories.find((cat) => cat.id === suggestedCategoryId)!;
+
     const selectedAccountInfo = accountsList.find(
       (acc) => acc.id === selectedAccountId
     );
-    const accountName = selectedAccountInfo
-      ? selectedAccountInfo.title
-      : "Unknown Account";
+    const accountName = selectedAccountInfo?.title || "Unknown Account";
+
     const newTransactionData = {
       type: transactionType,
       categoryName: categoryToSave.name,
@@ -511,11 +657,14 @@ export default function TransactionScreen() {
       accountName: accountName,
       description: transactionDescription.trim() || null,
       timestamp: serverTimestamp(),
+      isDeleted: false,
+      deletedAt: null,
     };
 
     try {
       if (selectedAccountId) {
         await runTransaction(db, async (transaction) => {
+          // ...existing transaction code...
           const accountDocRef = doc(
             db,
             "Accounts",
@@ -538,16 +687,13 @@ export default function TransactionScreen() {
           transaction.update(accountDocRef, { balance: newBalance });
           transaction.set(newTransactionRef, newTransactionData);
         });
-        console.log("Transaction committed (with account update).");
       } else {
         await addDoc(
-          collection(db, "Accounts", userId, "transactions"),
+          collection(db, "Accounts", currentUser!.uid, "transactions"),
           newTransactionData
         );
-        console.log("Transaction added (without account update).");
       }
 
-      console.log("Transaction successfully committed!");
       Alert.alert("Success", "Record Saved");
       handleCloseAmountModal();
       if (navigation.canGoBack()) {
@@ -561,6 +707,8 @@ export default function TransactionScreen() {
           error.message || "Please try again."
         }`
       );
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -575,9 +723,7 @@ export default function TransactionScreen() {
   };
 
   return (
-    // Use SafeAreaView as the main container for the screen content
     <SafeAreaView style={styles.safeAreaContainer}>
-      {/* Stack Screen Options remain the same */}
       <Stack.Screen
         options={{
           headerLeft: () => (
@@ -606,7 +752,7 @@ export default function TransactionScreen() {
         }}
       />
 
-      {/* Type Selector */}
+      {/* --- Income/Expense Toggle --- */}
       <View style={styles.typeSelector}>
         <TouchableOpacity
           style={[
@@ -614,21 +760,15 @@ export default function TransactionScreen() {
             transactionType === "Expenses" && styles.activeTypeButton,
           ]}
           onPress={() => setTransactionType("Expenses")}
-          activeOpacity={0.7}
+          activeOpacity={0.8}
         >
-          <Ionicons
-            name="arrow-down-outline"
-            size={18}
-            color={transactionType === "Expenses" ? "#fff" : "#666"}
-            style={{ marginRight: 6 }}
-          />
           <Text
             style={[
               styles.typeButtonText,
               transactionType === "Expenses" && styles.activeTypeButtonText,
             ]}
           >
-            Expenses
+            Expense
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -637,14 +777,8 @@ export default function TransactionScreen() {
             transactionType === "Income" && styles.activeTypeButton,
           ]}
           onPress={() => setTransactionType("Income")}
-          activeOpacity={0.7}
+          activeOpacity={0.8}
         >
-          <Ionicons
-            name="arrow-up-outline"
-            size={18}
-            color={transactionType === "Income" ? "#fff" : "#666"}
-            style={{ marginRight: 6 }}
-          />
           <Text
             style={[
               styles.typeButtonText,
@@ -656,74 +790,59 @@ export default function TransactionScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* ScrollView Content */}
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <Text style={styles.sectionTitle}>Categories</Text>
-        <View style={styles.categoriesGrid}>
-          {currentCategories.map((category) => (
-            <TouchableOpacity
-              key={category.id}
-              style={[
-                styles.categoryItem,
-                (selectedCategoryForAmount?.id === category.id ||
-                  suggestedCategoryId === category.id) &&
-                  styles.categoryItemSelected,
-              ]}
-              onPress={() => handleCategoryPress(category)}
-              activeOpacity={0.7}
-            >
-              <View
+      <ScrollView style={styles.scrollView}>
+        <View style={styles.categorySection}>
+          <Text style={styles.sectionTitle}>Category</Text>
+          <View style={styles.categoryGrid}>
+            {currentCategories.map((category) => (
+              <TouchableOpacity
+                key={category.id}
                 style={[
-                  styles.categoryIcon,
-                  (selectedCategoryForAmount?.id === category.id ||
-                    suggestedCategoryId === category.id) &&
-                    styles.categoryIconSelected,
+                  styles.categoryItem,
+                  selectedCategoryForAmount?.id === category.id &&
+                    styles.selectedCategory,
                 ]}
+                onPress={() => handleCategoryPress(category)}
+                activeOpacity={0.7}
               >
-                <MaterialCommunityIcons
-                  name={
-                    category.icon as keyof typeof MaterialCommunityIcons.glyphMap
-                  }
-                  size={24}
-                  color={
-                    selectedCategoryForAmount?.id === category.id ||
-                    suggestedCategoryId === category.id
-                      ? "#006400"
-                      : "white"
-                  }
-                />
-              </View>
-              <Text
-                style={[
-                  styles.categoryText,
-                  (selectedCategoryForAmount?.id === category.id ||
-                    suggestedCategoryId === category.id) &&
-                    styles.categoryTextSelected,
-                ]}
-              >
-                {category.name}
-              </Text>
-              {suggestedCategoryId === category.id &&
-                !selectedCategoryForAmount && (
-                  <Text style={styles.suggestionLabel}>Suggested</Text>
-                )}
-            </TouchableOpacity>
-          ))}
+                <View
+                  style={[
+                    styles.categoryIcon,
+                    selectedCategoryForAmount?.id === category.id &&
+                      styles.selectedCategoryIcon,
+                  ]}
+                >
+                  <MaterialCommunityIcons
+                    name={category.icon}
+                    size={28}
+                    color="#fff"
+                  />
+                </View>
+                <Text
+                  style={[
+                    styles.categoryText,
+                    selectedCategoryForAmount?.id === category.id &&
+                      styles.selectedCategoryText,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {category.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
           <TouchableOpacity
             style={styles.addNewButton}
             onPress={() => setIsAddCategoryModalVisible(true)}
+            activeOpacity={0.8}
           >
-            <Text style={styles.addNewButtonText}>+ Add New Category</Text>
+            <Text style={styles.addNewButtonText}>+ Add Category</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
 
-      {/* Conditionally Render Add Category Modals */}
+      {/* Restore Add Category Modal */}
       {transactionType === "Income" ? (
         <AddIncomeCategoryModal
           visible={isAddCategoryModalVisible}
@@ -738,7 +857,6 @@ export default function TransactionScreen() {
         />
       )}
 
-      {/* Amount Input Modal */}
       <Modal
         visible={isAmountModalVisible}
         transparent
@@ -857,18 +975,58 @@ export default function TransactionScreen() {
                   styles.saveButton,
                   (isLoadingAccounts ||
                     (!selectedCategoryForAmount && !suggestedCategoryId) ||
-                    !currentUser) &&
+                    !currentUser ||
+                    isSaving) &&
                     styles.saveButtonDisabled,
                 ]}
                 onPress={handleSaveAmount}
                 disabled={
                   !currentUser ||
                   isLoadingAccounts ||
-                  (!selectedCategoryForAmount && !suggestedCategoryId)
+                  (!selectedCategoryForAmount && !suggestedCategoryId) ||
+                  isSaving
                 }
                 activeOpacity={0.7}
               >
-                <Text style={styles.saveButtonText}>Save</Text>
+                <Text style={styles.saveButtonText}>
+                  {isSaving ? "Saving..." : "Save"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Budget Warning Modal */}
+      <Modal
+        visible={showBudgetWarningModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowBudgetWarningModal(false)}
+      >
+        <SafeAreaView style={styles.amountModalSafeArea}>
+          <View style={styles.amountModalContent}>
+            <MaterialCommunityIcons
+              name="alert-circle-outline"
+              size={40}
+              color="#B58900"
+              style={styles.warningIcon}
+            />
+            <Text style={styles.warningTitle}>Budget Warning</Text>
+            <Text style={styles.warningMessage}>{budgetWarningMessage}</Text>
+
+            <View style={styles.amountModalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setShowBudgetWarningModal(false)}
+              >
+                <Text style={styles.cancelButtonText}>Edit Amount</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.saveButton]}
+                onPress={handleConfirmSaveAfterWarning}
+              >
+                <Text style={styles.saveButtonText}>Continue Anyway</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -876,7 +1034,7 @@ export default function TransactionScreen() {
       </Modal>
     </SafeAreaView>
   );
-}
+};
 
 const styles = StyleSheet.create({
   safeAreaContainer: {
@@ -955,77 +1113,47 @@ const styles = StyleSheet.create({
   categoryItem: {
     width: "30%",
     alignItems: "center",
-    marginBottom: 22,
-    position: "relative",
+    marginBottom: 20,
+    marginHorizontal: "1.5%",
   },
-  categoryItemSelected: {
+  selectedCategory: {
     transform: [{ scale: 1.05 }],
   },
   categoryIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: "#006400",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 8,
-    // shadowColor: "#000",
-    // shadowOffset: { width: 0, height: 3 },
-    // shadowOpacity: 0.2,
-    // shadowRadius: 4,
-    // elevation: 4,
-    borderWidth: 2,
-    borderColor: "transparent",
   },
-  categoryIconSelected: {
-    backgroundColor: "#B58900",
-    borderColor: "#006400",
+  selectedCategoryIcon: {
+    backgroundColor: "#004d00",
   },
   categoryText: {
     fontSize: 13,
+    color: "#333",
     textAlign: "center",
-    color: "#444",
-    fontWeight: "500",
     marginTop: 4,
-    lineHeight: 16,
-    paddingHorizontal: 2,
   },
-  categoryTextSelected: {
-    fontWeight: "700",
+  selectedCategoryText: {
     color: "#006400",
-  },
-  suggestionLabel: {
-    position: "absolute",
-    top: -8,
-    right: 2,
-    backgroundColor: "#B58900",
-    color: "white",
-    fontSize: 9,
-    fontWeight: "bold",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    overflow: "hidden",
+    fontWeight: "600",
   },
   addNewButton: {
-    width: "100%",
+    backgroundColor: "#006400",
     paddingVertical: 14,
-    backgroundColor: "#B58900",
-    borderRadius: 12,
+    borderRadius: 8,
     alignItems: "center",
     marginTop: 10,
-    marginBottom: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+    marginHorizontal: 15,
+    marginBottom: 20,
   },
   addNewButtonText: {
     color: "#fff",
     fontSize: 16,
-    fontWeight: "700",
-    letterSpacing: 0.1,
+    fontWeight: "600",
   },
   amountModalSafeArea: {
     flex: 1,
@@ -1235,4 +1363,46 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 20,
   },
+  scrollView: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 16,
+  },
+  categorySection: {
+    marginBottom: 20,
+  },
+  categoryGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "flex-start",
+    paddingHorizontal: 4,
+    paddingTop: 12,
+  },
+  categoryContent: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 8,
+  },
+  warningIcon: {
+    alignSelf: "center",
+    marginBottom: 10,
+  },
+  warningTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#B58900",
+    textAlign: "center",
+    marginBottom: 10,
+  },
+  warningMessage: {
+    fontSize: 16,
+    color: "#333",
+    textAlign: "center",
+    marginBottom: 20,
+    lineHeight: 22,
+  },
 });
+
+export default TransactionScreen;

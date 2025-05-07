@@ -1,35 +1,34 @@
 // c:\Users\scubo\OneDrive\Documents\putangina\fc\app\CreateAccounts.tsx
-import React, { useState, useEffect } from "react";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { onAuthStateChanged, User } from "firebase/auth";
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  Image,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  TouchableWithoutFeedback,
-  Keyboard,
-  ActivityIndicator,
-  ImageSourcePropType,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context"; // Import SafeAreaView
-import { Stack, useRouter, useLocalSearchParams } from "expo-router";
-import {
-  getDoc,
   collection,
   doc,
+  getDoc,
   runTransaction,
   serverTimestamp,
   updateDoc,
 } from "firebase/firestore";
-import { onAuthStateChanged, User } from "firebase/auth";
-import { db, auth } from "../app/firebase";
-import { useDateContext } from "./context/DateContext";
+import { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  ImageSourcePropType,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context"; // Import SafeAreaView
+import { auth, db } from "../app/firebase";
 import { CURRENCY_SYMBOLS } from "../utils/formatting";
+import { useDateContext } from "./context/DateContext";
 
 interface AccountImageOption {
   id: string;
@@ -321,26 +320,27 @@ const CreateAccountsScreen = () => {
   };
 
   return (
-    // Use SafeAreaView as the top-level container
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeAreaContainer}>
+      <Stack.Screen
+        options={{
+          title: isEditMode ? "Edit Account" : "Create New Account",
+          headerTitleAlign: "center",
+          headerStyle: { backgroundColor: "#006400" },
+          headerTintColor: "#fff",
+          headerTitleStyle: { fontWeight: "bold" },
+        }}
+      />
+
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.keyboardAvoidingContainer}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={styles.keyboardAvoidView}
       >
-        <Stack.Screen
-          options={{
-            title: isEditMode ? "Edit Account" : "Create New Account",
-            headerTitleAlign: "center",
-            headerStyle: { backgroundColor: "#006400" },
-            headerTintColor: "#fff",
-            headerTitleStyle: { fontWeight: "bold" },
-          }}
-        />
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View style={styles.mainContainer}>
           <ScrollView
-            style={styles.scrollContainer}
-            contentContainerStyle={{ flexGrow: 1 }}
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
           >
             {isLoadingData && (
               <View style={styles.loadingOverlay}>
@@ -348,6 +348,8 @@ const CreateAccountsScreen = () => {
                 <Text style={styles.loadingText}>Loading Account Data...</Text>
               </View>
             )}
+
+            {/* Form Content */}
             <View style={styles.formContainer}>
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Account Name *</Text>
@@ -482,43 +484,112 @@ const CreateAccountsScreen = () => {
                   </View>
                 </View>
               </View>
+            </View>
 
-              <View style={styles.actionButtonsContainer}>
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.cancelButton]}
-                  onPress={handleCancel}
-                  disabled={isSaving || isLoadingData}
-                >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.actionButton,
-                    styles.saveButton,
-                    (isSaving || isLoadingData || !currentUser) &&
-                      styles.actionButtonDisabled,
-                  ]}
-                  onPress={handleSaveAccount}
-                  disabled={isSaving || isLoadingData || !currentUser}
-                >
-                  {isSaving ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <Text style={styles.saveButtonText}>
-                      {isEditMode ? "Update Account" : "Save Account"}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </View>
+            {/* Add the buttons at the bottom of ScrollView */}
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.cancelButton]}
+                onPress={handleCancel}
+                disabled={isSaving || isLoadingData}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  styles.saveButton,
+                  (isSaving || isLoadingData || !currentUser) &&
+                    styles.actionButtonDisabled,
+                ]}
+                onPress={handleSaveAccount}
+                disabled={isSaving || isLoadingData || !currentUser}
+              >
+                {isSaving ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.saveButtonText}>
+                    {isEditMode ? "Update Account" : "Save Account"}
+                  </Text>
+                )}
+              </TouchableOpacity>
             </View>
           </ScrollView>
-        </TouchableWithoutFeedback>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeAreaContainer: {
+    flex: 1,
+    backgroundColor: "#f4f6f8",
+  },
+  keyboardAvoidView: {
+    flex: 1,
+  },
+  mainContainer: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 90, // Add padding to prevent content being hidden behind buttons
+  },
+  formContainer: {
+    backgroundColor: "white",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  buttonContainer: {
+    flexDirection: "row",
+    padding: 16,
+    marginTop: 20,
+    marginBottom: 30,
+    gap: 10,
+  },
+  actionButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 50,
+  },
+  cancelButton: {
+    backgroundColor: "#f5f5f5",
+    borderWidth: 1,
+    borderColor: "#ddd",
+  },
+  saveButton: {
+    backgroundColor: "#DAA520",
+    borderWidth: 1,
+    borderColor: "#DAA520",
+  },
+  actionButtonDisabled: {
+    backgroundColor: "#e9d8a1",
+    borderColor: "#e9d8a1",
+    opacity: 0.7,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#555",
+  },
+  saveButtonText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#fff",
+  },
   safeArea: { flex: 1, backgroundColor: "#f4f6f8" }, // Apply background to SafeAreaView
   keyboardAvoidingContainer: { flex: 1 }, // Removed background color
   scrollContainer: { flex: 1 },
@@ -535,7 +606,6 @@ const styles = StyleSheet.create({
     color: "#333",
     fontWeight: "500",
   },
-  formContainer: { padding: 25, flexGrow: 1, paddingBottom: 40 },
   inputGroup: { width: "100%", marginBottom: 20 },
   inputLabel: {
     fontSize: 15,
@@ -624,25 +694,10 @@ const styles = StyleSheet.create({
     marginTop: 30,
     paddingHorizontal: 5,
   },
-  actionButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: "center",
-    marginHorizontal: 6,
-    borderWidth: 1,
-    minHeight: 48,
-    justifyContent: "center",
-  },
-  cancelButton: { borderColor: "#ccc", backgroundColor: "#f8f9fa" },
-  cancelButtonText: { fontSize: 16, fontWeight: "bold", color: "#555" },
-  saveButton: { backgroundColor: "#DAA520", borderColor: "#DAA520" },
-  saveButtonText: { fontSize: 16, fontWeight: "bold", color: "#fff" },
-  actionButtonDisabled: {
-    opacity: 0.6,
-    backgroundColor: "#e9d8a1",
-    borderColor: "#e9d8a1",
-  },
+
+  // If you need a different style for modal buttons, use a unique name:
+  modalCancelButtonText: { fontSize: 16, fontWeight: "bold", color: "#666" },
+  modalSaveButtonText: { fontSize: 16, fontWeight: "bold", color: "#fff" },
 });
 
 export default CreateAccountsScreen;

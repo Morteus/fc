@@ -1,5 +1,4 @@
 // c:\Users\scubo\OneDrive\Documents\putangina\fc\app\_layout.tsx
-import React from "react";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar"; // Import StatusBar
 // Import SafeAreaProvider
@@ -48,7 +47,12 @@ export default function RootLayout() {
             name="password"
             options={{ title: "Change Password" }}
           />
-
+          <Stack.Screen
+            name="deletedrecords"
+            options={{
+              headerShown: false,
+            }}
+          />
           {/* Add a screen for the 404 page if you have one */}
           {/* <Stack.Screen name="+not-found" /> */}
 
