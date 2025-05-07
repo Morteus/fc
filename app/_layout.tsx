@@ -53,6 +53,13 @@ export default function RootLayout() {
               headerShown: false,
             }}
           />
+          <Stack.Screen
+            name="setbudget"
+            options={{
+              headerShown: false,
+              presentation: "modal",
+            }}
+          />
           {/* Add a screen for the 404 page if you have one */}
           {/* <Stack.Screen name="+not-found" /> */}
 

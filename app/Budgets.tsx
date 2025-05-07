@@ -1,18 +1,15 @@
 // c:\Users\scubo\OneDrive\Documents\putangina\fc\app\Budgets.tsx
 import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation } from "expo-router";
 import { onAuthStateChanged, User } from "firebase/auth";
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
   onSnapshot,
   orderBy,
   query,
-  serverTimestamp,
   Timestamp,
-  updateDoc,
   where,
 } from "firebase/firestore";
 import { useEffect, useMemo, useState } from "react";
@@ -20,11 +17,8 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Modal,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -33,7 +27,7 @@ import { SafeAreaView } from "react-native-safe-area-context"; // Import SafeAre
 import { auth, db } from "../app/firebase";
 import BotNavigationBar from "../components/botnavigationbar";
 import HeaderTopNav from "../components/headertopnav";
-import { CURRENCY_SYMBOLS, formatCurrency } from "../utils/formatting"; // Import CURRENCY_SYMBOLS
+import { formatCurrency } from "../utils/formatting"; // Import CURRENCY_SYMBOLS
 import { useDateContext } from "./context/DateContext";
 
 const PREDEFINED_EXPENSE_CATEGORIES: Array<{
@@ -88,6 +82,7 @@ interface BudgetDisplayData {
   limit: number;
   budgetId: string | null;
   currentSpending: number;
+  resetPeriod?: "Daily" | "Weekly" | "Monthly"; // Add this field
 }
 
 const getMonthNumber = (monthName: string): number => {
@@ -108,8 +103,12 @@ const getMonthNumber = (monthName: string): number => {
   return months.indexOf(monthName);
 };
 
+type NavigationProps = {
+  navigate: (screen: string, params?: any) => void;
+};
+
 const BudgetsScreen = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProps>();
   const { selectedYear, selectedMonth, selectedFilter, selectedCurrency } =
     useDateContext();
 
@@ -128,14 +127,6 @@ const BudgetsScreen = () => {
     null
   );
 
-  const [isModalVisible, setIsModalVisible] = useState(false);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [editingBudgetId, setEditingBudgetId] = useState<string | null>(null);
-  const [selectedCategoryName, setSelectedCategoryName] = useState<
-    string | null
-  >(null);
-  const [budgetLimit, setBudgetLimit] = useState<string>("");
-
   const [expenseTransactions, setExpenseTransactions] = useState<Transaction[]>(
     []
   );
@@ -147,10 +138,6 @@ const BudgetsScreen = () => {
   const [notifiedExceededCategories, setNotifiedExceededCategories] = useState<
     Set<string>
   >(new Set());
-
-  const [selectedResetPeriod, setSelectedResetPeriod] = useState<
-    "Daily" | "Weekly" | "Monthly"
-  >("Monthly");
 
   const navigateToTransaction = () => {
     navigation.navigate("transactions" as never);
@@ -419,6 +406,7 @@ const BudgetsScreen = () => {
           limit: limit,
           currentSpending: currentSpending,
           budgetId: budgetId,
+          resetPeriod: budgetDef?.resetPeriod ?? "Monthly", // Add this line
         };
       })
       .sort((a, b) => {
@@ -493,109 +481,13 @@ const BudgetsScreen = () => {
   };
 
   const openModalForCategory = (item: BudgetDisplayData) => {
-    setSelectedCategoryName(item.categoryName);
-    setIsEditMode(!!item.budgetId);
-    setEditingBudgetId(item.budgetId);
-    setBudgetLimit(item.limit > 0 ? String(item.limit) : "");
-    setIsModalVisible(true);
-  };
-
-  const closeModal = () => {
-    setIsModalVisible(false);
-    setIsEditMode(false);
-    setEditingBudgetId(null);
-    setSelectedCategoryName(null);
-    setBudgetLimit("");
-  };
-
-  const handleSaveBudget = async () => {
-    if (!currentUser) {
-      Alert.alert("Login Required", "You must be logged in to save budgets.");
-      return;
-    }
-    const limitValue = parseFloat(budgetLimit);
-    if (!selectedCategoryName) {
-      Alert.alert("Error", "Category not selected. Please try again.");
-      return;
-    }
-    if (isNaN(limitValue) || limitValue <= 0) {
-      Alert.alert(
-        "Validation Error",
-        "Please enter a valid positive number for the budget limit."
-      );
-      return;
-    }
-
-    const allCategoriesMap = new Map<
-      string,
-      { name: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }
-    >();
-    PREDEFINED_EXPENSE_CATEGORIES.forEach((cat) =>
-      allCategoriesMap.set(cat.name, cat)
-    );
-    userExpenseCategories.forEach((userCat) => {
-      if (!allCategoriesMap.has(userCat.name)) {
-        allCategoriesMap.set(userCat.name, {
-          name: userCat.name,
-          icon: userCat.icon || "help-circle-outline",
-        });
-      }
+    navigation.navigate("setbudget", {
+      categoryName: item.categoryName,
+      icon: item.icon,
+      budgetId: item.budgetId,
+      currentLimit: item.limit,
+      resetPeriod: item.resetPeriod || "Monthly", // Add default value
     });
-    const categoryInfo = allCategoriesMap.get(selectedCategoryName);
-    if (!categoryInfo) {
-      Alert.alert("Error", "Internal error: Category details not found.");
-      return;
-    }
-
-    const budgetData = {
-      categoryName: selectedCategoryName,
-      limit: limitValue,
-      icon: categoryInfo.icon,
-      resetPeriod: selectedResetPeriod,
-      lastResetDate: serverTimestamp(),
-    };
-    const budgetsColRef = collection(
-      db,
-      "Accounts",
-      currentUser.uid,
-      "budgets"
-    );
-
-    try {
-      if (isEditMode && editingBudgetId) {
-        const budgetDocRef = doc(budgetsColRef, editingBudgetId);
-        await updateDoc(budgetDocRef, budgetData);
-        Alert.alert(
-          "Success",
-          `Budget limit for "${selectedCategoryName}" updated.`
-        );
-      } else {
-        const existingBudget = budgetDefinitions.find(
-          (b) => b.categoryName === selectedCategoryName
-        );
-        if (existingBudget) {
-          Alert.alert(
-            "Info",
-            `Budget for "${selectedCategoryName}" already exists. Updating limit.`
-          );
-          const budgetDocRef = doc(budgetsColRef, existingBudget.id);
-          await updateDoc(budgetDocRef, budgetData);
-        } else {
-          await addDoc(budgetsColRef, budgetData);
-          Alert.alert(
-            "Success",
-            `Budget limit for "${selectedCategoryName}" set.`
-          );
-        }
-      }
-      closeModal();
-    } catch (err: any) {
-      console.error("Error saving budget:", err);
-      Alert.alert(
-        "Error",
-        `Could not save budget limit. ${err.message || "Please try again."}`
-      );
-    }
   };
 
   const handleDeleteBudget = (
@@ -839,99 +731,6 @@ const BudgetsScreen = () => {
         </View>
       </SafeAreaView>
 
-      {/* Modal for Setting/Editing Budget Limit */}
-      <Modal
-        visible={isModalVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={closeModal}
-      >
-        {/* Wrap modal content in SafeAreaView */}
-        <SafeAreaView style={styles.modalSafeArea}>
-          <ScrollView
-            contentContainerStyle={styles.modalScrollViewContainer}
-            keyboardShouldPersistTaps="handled"
-          >
-            <View style={styles.modalContainer}>
-              <Text style={styles.modalTitle}>
-                {isEditMode ? "Edit Budget Limit" : "Set Budget Limit"}
-              </Text>
-              {selectedCategoryName && (
-                <View style={styles.modalCategoryDisplay}>
-                  <Text style={styles.modalLabel}>For Category:</Text>
-                  <Text style={styles.modalCategoryName}>
-                    {selectedCategoryName}
-                  </Text>
-                </View>
-              )}
-              <Text style={styles.modalLabel}>
-                Budget Limit (
-                {CURRENCY_SYMBOLS[selectedCurrency] || selectedCurrency}):
-              </Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="e.g., 5000"
-                keyboardType="numeric"
-                value={budgetLimit}
-                onChangeText={setBudgetLimit}
-                placeholderTextColor="#999"
-                autoFocus={true}
-              />
-              <Text style={styles.modalLabel}>Reset Period:</Text>
-              <View style={styles.resetPeriodSelector}>
-                {(["Daily", "Weekly", "Monthly"] as const).map((period) => (
-                  <TouchableOpacity
-                    key={period}
-                    style={[
-                      styles.resetPeriodButton,
-                      selectedResetPeriod === period &&
-                        styles.resetPeriodButtonSelected,
-                    ]}
-                    onPress={() => setSelectedResetPeriod(period)}
-                  >
-                    <Text
-                      style={[
-                        styles.resetPeriodText,
-                        selectedResetPeriod === period &&
-                          styles.resetPeriodTextSelected,
-                      ]}
-                    >
-                      {period}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalCancelButton]}
-                  onPress={closeModal}
-                >
-                  <Text style={styles.modalCancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.modalButton,
-                    styles.modalSaveButton,
-                    (!currentUser ||
-                      !budgetLimit ||
-                      parseFloat(budgetLimit) <= 0) &&
-                      styles.modalSaveButtonDisabled,
-                  ]}
-                  onPress={handleSaveBudget}
-                  disabled={
-                    !currentUser || !budgetLimit || parseFloat(budgetLimit) <= 0
-                  }
-                >
-                  <Text style={styles.modalSaveButtonText}>
-                    {isEditMode ? "Update Limit" : "Set Limit"}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
-
       {/* Bottom Nav remains outside SafeAreaView */}
       <BotNavigationBar />
     </>
@@ -1065,127 +864,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     zIndex: 1,
   },
-  modalSafeArea: {
-    // Style for modal SafeAreaView
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
-  },
-  // modalBackdrop removed, replaced by modalSafeArea
-  modalScrollViewContainer: {
-    flexGrow: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: 40,
-    width: "100%",
-  },
-  modalContainer: {
-    width: "90%",
-    maxWidth: 400,
-    backgroundColor: "white",
-    borderRadius: 10,
-    padding: 25,
-    alignItems: "stretch",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#006400",
-    marginBottom: 20,
-    textAlign: "center",
-  },
-  modalCategoryDisplay: {
-    marginBottom: 20,
-    padding: 10,
-    backgroundColor: "#f8f9fa",
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: "#eee",
-    alignItems: "center",
-  },
-  modalCategoryName: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#333",
-    textAlign: "center",
-  },
-  modalLabel: {
-    fontSize: 16,
-    color: "#333",
-    marginBottom: 8,
-    fontWeight: "500",
-  },
-  modalInput: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 25,
-    fontSize: 18,
-    backgroundColor: "#f9f9f9",
-    color: "#333",
-  },
-  resetPeriodSelector: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 20,
-  },
-  resetPeriodButton: {
-    flex: 1,
-    padding: 12,
-    marginHorizontal: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    alignItems: "center",
-  },
-  resetPeriodButtonSelected: {
-    backgroundColor: "#006400",
-    borderColor: "#006400",
-  },
-  resetPeriodText: {
-    fontSize: 14,
-    color: "#333",
-  },
-  resetPeriodTextSelected: {
-    color: "#fff",
-    fontWeight: "bold",
-  },
-  modalButtons: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 15,
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: "center",
-    marginHorizontal: 5,
-  },
-  modalCancelButton: {
-    backgroundColor: "#f8f9fa",
-    borderWidth: 1,
-    borderColor: "#ced4da",
-  },
-  modalSaveButton: {
-    backgroundColor: "#DAA520",
-    borderWidth: 1,
-    borderColor: "#DAA520",
-  },
-  modalSaveButtonDisabled: {
-    backgroundColor: "#e9d8a1",
-    borderColor: "#e9d8a1",
-    opacity: 0.7,
-  },
-  modalCancelButtonText: { color: "#495057", fontSize: 16, fontWeight: "bold" },
-  modalSaveButtonText: { color: "white", fontSize: 16, fontWeight: "bold" },
 });
 
 export default BudgetsScreen;
