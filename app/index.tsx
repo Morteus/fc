@@ -22,23 +22,18 @@ import {
 
 import { auth } from "./firebase"; // <-- Import initialized auth instance
 
-const getFirebaseAuthErrorMessage = (
-  errorCode: string,
-  defaultMessage: string
-): string => {
+const getFirebaseAuthErrorMessage = (errorCode: string): string => {
   switch (errorCode) {
     case "auth/invalid-email":
-      return "Please enter a valid email address.";
-    case "auth/user-disabled":
-      return "This account has been disabled.";
     case "auth/user-not-found":
-      return "No account found with this email.";
     case "auth/wrong-password":
-      return "Invalid password.";
+      return "Invalid email or password. Please try again.";
+    case "auth/user-disabled":
+      return "This account has been disabled. Please contact support.";
     case "auth/too-many-requests":
       return "Too many failed attempts. Please try again later.";
     default:
-      return defaultMessage || "An error occurred during sign in.";
+      return "Invalid credentials. Please try again.";
   }
 };
 
@@ -53,7 +48,7 @@ const LoginScreen = () => {
   // --- Email/Password Login Handler ---
   const handleLogin = async () => {
     if (!email || !password) {
-      setError("Please fill in all fields");
+      setError("Please enter both email and password");
       return;
     }
 
@@ -71,11 +66,12 @@ const LoginScreen = () => {
         return;
       }
 
-      // Continue with successful login
-      router.replace("/record"); // Changed from "/home" to "/record"
+      router.replace("/record");
     } catch (error: any) {
       console.error(error);
-      setError(getFirebaseAuthErrorMessage(error.code, error.message));
+      setError(getFirebaseAuthErrorMessage(error.code));
+      // Clear password field on error
+      setPassword("");
     } finally {
       setIsLoading(false);
     }

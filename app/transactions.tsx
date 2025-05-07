@@ -13,6 +13,7 @@ import {
   query,
   runTransaction,
   serverTimestamp,
+  Timestamp,
   where,
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
@@ -293,24 +294,36 @@ const checkBudgetStatus = async (
       // Calculate start date based on reset period
       switch (budgetData.resetPeriod) {
         case "Daily":
-          startDate = new Date(now.setHours(0, 0, 0, 0));
+          startDate = new Date();
+          startDate.setHours(0, 0, 0, 0);
           break;
         case "Weekly":
           const day = now.getDay();
-          startDate = new Date(now.setDate(now.getDate() - day));
+          startDate = new Date(now);
+          startDate.setDate(now.getDate() - day);
+          startDate.setHours(0, 0, 0, 0);
           break;
         case "Monthly":
-          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+          startDate = new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            1,
+            0,
+            0,
+            0,
+            0
+          );
           break;
         default:
-          startDate = new Date(now.setHours(0, 0, 0, 0));
+          startDate = new Date();
+          startDate.setHours(0, 0, 0, 0);
       }
 
       const spendingQuery = query(
         transactionsRef,
         where("type", "==", "Expenses"),
         where("categoryName", "==", categoryName),
-        where("timestamp", ">=", startDate)
+        where("timestamp", ">=", Timestamp.fromDate(startDate))
       );
 
       const spendingSnap = await getDocs(spendingQuery);

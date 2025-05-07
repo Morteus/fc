@@ -181,7 +181,9 @@ export default function DeletedRecordsScreen() {
                 </Text>
                 <Text style={styles.date}>
                   Deleted on:{" "}
-                  {transaction.deletedAt?.toDate().toLocaleDateString()}
+                  {transaction.deletedAt && transaction.deletedAt.toDate
+                    ? transaction.deletedAt.toDate().toLocaleDateString()
+                    : "Unknown"}
                 </Text>
               </View>
 

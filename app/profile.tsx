@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import {
+  deleteUser,
   EmailAuthProvider,
   onAuthStateChanged,
   reauthenticateWithCredential,
@@ -25,6 +26,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import DeleteAccountModal from "../components/DeleteAccountModal";
 import { CURRENCY_SYMBOLS } from "../utils/formatting";
 import { useDateContext } from "./context/DateContext";
 import { app, auth } from "./firebase";
@@ -44,6 +46,8 @@ const ProfilePage = () => {
   const [showPasswordField, setShowPasswordField] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [newDisplayName, setNewDisplayName] = useState("");
+  const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const db = getFirestore(app);
 
   useEffect(() => {
@@ -183,6 +187,56 @@ const ProfilePage = () => {
       setNewDisplayName("");
     } catch (error: any) {
       Alert.alert("Error", "Failed to update display name");
+    }
+  };
+
+  const handleDeleteAccount = async (password: string) => {
+    if (!currentUser) return;
+
+    try {
+      setIsDeleting(true);
+      const credential = EmailAuthProvider.credential(
+        currentUser.email!,
+        password
+      );
+      await reauthenticateWithCredential(currentUser, credential);
+
+      // Delete user
+      await deleteUser(currentUser);
+      setIsDeleteModalVisible(false);
+      router.replace("/");
+    } catch (error: any) {
+      let errorMessage = "Failed to delete account. Please try again.";
+      if (error.code === "auth/wrong-password") {
+        errorMessage = "Incorrect password. Please try again.";
+      }
+      Alert.alert("Error", errorMessage);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleConfirmDelete = async (password: string) => {
+    if (!currentUser) return;
+
+    try {
+      setIsDeleting(true);
+      const credential = EmailAuthProvider.credential(
+        currentUser.email!,
+        password
+      );
+      await reauthenticateWithCredential(currentUser, credential);
+      await deleteUser(currentUser);
+      setIsDeleteModalVisible(false);
+      router.replace("/");
+    } catch (error: any) {
+      let errorMessage = "Failed to delete account. Please try again.";
+      if (error.code === "auth/wrong-password") {
+        errorMessage = "Incorrect password. Please try again.";
+      }
+      Alert.alert("Error", errorMessage);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -342,7 +396,7 @@ const ProfilePage = () => {
             />
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.listItem, { borderBottomWidth: 0 }]}
+            style={styles.listItem}
             onPress={() => Alert.alert("Notifications", "Coming soon!")}
             disabled={!currentUser || isLoading}
           >
@@ -351,6 +405,20 @@ const ProfilePage = () => {
               name="chevron-forward-outline"
               size={20}
               color="#006400"
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.listItem, { borderBottomWidth: 0 }]}
+            onPress={() => setIsDeleteModalVisible(true)}
+            disabled={!currentUser || isLoading}
+          >
+            <Text style={[styles.listItemText, { color: "#dc3545" }]}>
+              Delete My Account
+            </Text>
+            <Ionicons
+              name="chevron-forward-outline"
+              size={20}
+              color="#dc3545"
             />
           </TouchableOpacity>
         </View>
@@ -525,6 +593,13 @@ const ProfilePage = () => {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      <DeleteAccountModal
+        visible={isDeleteModalVisible}
+        onClose={() => setIsDeleteModalVisible(false)}
+        onConfirmDelete={handleConfirmDelete}
+        isDeleting={isDeleting}
+      />
     </SafeAreaView>
   );
 };
@@ -671,6 +746,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: "#fff",
+    backgroundColor: "#ffff",
   },
   emailCard: {
     backgroundColor: "white",

@@ -262,47 +262,74 @@ const SummaryModal: React.FC<SummaryModalProps> = ({
           ...new Set([...predefinedNames, ...userNames]),
         ];
         const budgetsColRef = collection(db, "Accounts", userId, "budgets");
-        const categoryFilter =
-          allCategoryNames.length > 0
-            ? allCategoryNames.slice(0, 30) // Firestore 'in' query limit
-            : ["__EMPTY_PLACEHOLDER__"];
 
-        if (allCategoryNames.length > 30) {
+        // Batch into groups of 10 for Firestore 'in' query
+        const batches: string[][] = [];
+        for (let i = 0; i < allCategoryNames.length; i += 10) {
+          batches.push(allCategoryNames.slice(i, i + 10));
+        }
+
+        if (allCategoryNames.length > 10) {
           console.warn(
-            "SummaryModal: More than 30 expense categories. Budget fetching might be incomplete."
+            "SummaryModal: More than 10 expense categories. Budget fetching will be batched due to Firestore 'in' query limits."
           );
         }
 
-        const qBudget = query(
-          budgetsColRef,
-          where("categoryName", "in", categoryFilter)
-        );
+        let allBudgets: BudgetDefinition[] = [];
+        let completed = 0;
+        let hasError = false;
+        const batchUnsubs: (() => void)[] = [];
 
-        const unsubscribeBudgets = onSnapshot(
-          qBudget,
-          (snapshot) => {
-            const fetchedBudgets: BudgetDefinition[] = snapshot.docs.map(
-              (doc) =>
-                ({
-                  id: doc.id,
-                  ...doc.data(),
-                } as BudgetDefinition)
-            );
-            setBudgetDefinitions(fetchedBudgets);
-            // Check if all data is loaded
-            if (!activeError) setIsLoading(false);
-          },
-          (err) => {
-            console.error(
-              "Error fetching budget definitions for summary:",
-              err
-            );
-            activeError = "Failed to load budget limits.";
-            setError(activeError);
-            setIsLoading(false); // Stop loading on error
-          }
-        );
-        unsubscribers.push(unsubscribeBudgets); // Add budget listener to unsub list
+        if (allCategoryNames.length === 0) {
+          setBudgetDefinitions([]);
+          if (!activeError) setIsLoading(false);
+          return;
+        }
+
+        batches.forEach((categoryFilter) => {
+          const qBudget = query(
+            budgetsColRef,
+            where("categoryName", "in", categoryFilter)
+          );
+          const unsub = onSnapshot(
+            qBudget,
+            (snapshot) => {
+              if (hasError) return;
+              const fetchedBudgets: BudgetDefinition[] = snapshot.docs.map(
+                (doc) =>
+                  ({
+                    id: doc.id,
+                    ...doc.data(),
+                  } as BudgetDefinition)
+              );
+              allBudgets = [...allBudgets, ...fetchedBudgets];
+              completed += 1;
+              if (completed === batches.length) {
+                // Deduplicate by categoryName
+                const uniqueBudgets = new Map<string, BudgetDefinition>();
+                allBudgets.forEach((b) => {
+                  uniqueBudgets.set(b.categoryName, b);
+                });
+                setBudgetDefinitions(Array.from(uniqueBudgets.values()));
+                if (!activeError) setIsLoading(false);
+              }
+            },
+            (err) => {
+              if (hasError) return;
+              hasError = true;
+              console.error(
+                "Error fetching budget definitions for summary:",
+                err
+              );
+              activeError = "Failed to load budget limits.";
+              setError(activeError);
+              setIsLoading(false);
+            }
+          );
+          batchUnsubs.push(unsub);
+        });
+
+        unsubscribers.push(() => batchUnsubs.forEach((u) => u()));
       },
       (err) => {
         // Error fetching categories initially
