@@ -1,11 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Stack, useRouter } from "expo-router"; // Import Stack for header config
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import {
-  // getAuth, // No longer needed here
-  signInWithEmailAndPassword, // Only need Sign In for this screen
-} from "firebase/auth";
-import { useState } from "react";
+import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Keyboard,
@@ -20,22 +18,43 @@ import {
   View,
 } from "react-native";
 
-import { auth } from "./firebase"; // <-- Import initialized auth instance
+import { auth } from "./firebase";
 
 const LoginScreen = () => {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null); // State for inline errors
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
 
-  // --- Email/Password Login Handler ---
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        // Store user data in AsyncStorage
+        await AsyncStorage.setItem("user", JSON.stringify(user));
+        router.replace("/record");
+      } else {
+        // Check AsyncStorage for existing session
+        try {
+          const storedUser = await AsyncStorage.getItem("user");
+          if (storedUser) {
+            router.replace("/record");
+          }
+        } catch (error) {
+          console.log("Error checking stored user:", error);
+        }
+      }
+      setIsLoading(false);
+    });
+
+    return unsubscribe;
+  }, [router]);
+
   const handleLogin = () => {
     Keyboard.dismiss();
-    setError(null); // Clear previous errors
+    setError(null);
 
-    // --- Input Validations ---
     const trimmedEmail = email.trim();
     if (!trimmedEmail || !password) {
       setError("Please enter both email and password.");
@@ -46,15 +65,14 @@ const LoginScreen = () => {
       setError("Please enter a valid email address.");
       return;
     }
-    // --- End Validations ---
 
     setIsLoading(true);
 
     signInWithEmailAndPassword(auth, trimmedEmail, password)
-      .then((userCredential) => {
-        console.log("Successfully Logged in!", userCredential.user.email);
-        // Alert.alert("Login Successful", "Welcome back!"); // Optional: Show alert
-        router.replace("/record"); // Navigate on success
+      .then(async (userCredential) => {
+        // Store user data in AsyncStorage
+        await AsyncStorage.setItem("user", JSON.stringify(userCredential.user));
+        router.replace("/record");
       })
       .catch((error) => {
         console.error("Login Error:", error.code, error.message);
@@ -78,8 +96,7 @@ const LoginScreen = () => {
           default:
             errorMessage = `Login failed: ${error.message}`;
         }
-        setError(errorMessage); // Show error inline
-        // Alert.alert("Login Failed", errorMessage); // Optionally keep alert
+        setError(errorMessage);
       })
       .finally(() => setIsLoading(false));
   };
@@ -88,14 +105,20 @@ const LoginScreen = () => {
     setShowPassword(!showPassword);
   };
 
-  // --- Render UI ---
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#B58900" />
+      </View>
+    );
+  }
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={styles.keyboardAvoidingContainer}
     >
       <StatusBar style="dark" />
-      {/* Hide the header for the login screen */}
       <Stack.Screen options={{ headerShown: false }} />
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <ScrollView
@@ -103,25 +126,20 @@ const LoginScreen = () => {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.innerContainer}>
-            {/* Logo Placeholder */}
             <View style={styles.logoContainer}>
               <View style={styles.logoPlaceholder}>
                 <Text style={styles.logoText}>FC</Text>
               </View>
             </View>
 
-            {/* Title and Subtitle */}
             <Text style={styles.title}>Welcome Back</Text>
             <Text style={styles.subtitle}>
               Sign in to continue your financial journey
             </Text>
 
-            {/* Display Error Message */}
             {error && <Text style={styles.errorText}>{error}</Text>}
 
-            {/* Form Container */}
             <View style={styles.formContainer}>
-              {/* Email Input */}
               <View style={styles.inputContainer}>
                 <View style={styles.iconContainer}>
                   <Ionicons name="mail-outline" size={20} color="#555" />
@@ -139,7 +157,6 @@ const LoginScreen = () => {
                 />
               </View>
 
-              {/* Password Input */}
               <View style={styles.inputContainer}>
                 <View style={styles.iconContainer}>
                   <Ionicons name="lock-closed-outline" size={20} color="#555" />
@@ -166,7 +183,6 @@ const LoginScreen = () => {
                 </TouchableOpacity>
               </View>
 
-              {/* Forgot Password Link */}
               <TouchableOpacity
                 activeOpacity={0.8}
                 style={styles.forgotPasswordContainer}
@@ -179,7 +195,6 @@ const LoginScreen = () => {
               </TouchableOpacity>
             </View>
 
-            {/* --- Sign In Button --- */}
             <TouchableOpacity
               activeOpacity={0.8}
               style={[styles.button, isLoading && styles.buttonDisabled]}
@@ -193,7 +208,6 @@ const LoginScreen = () => {
               )}
             </TouchableOpacity>
 
-            {/* --- Navigate to Sign Up Link --- */}
             <View style={styles.signUpContainer}>
               <Text style={styles.signUpText}>Don&apos;t have an account?</Text>
               <TouchableOpacity
@@ -211,7 +225,6 @@ const LoginScreen = () => {
   );
 };
 
-// --- Styles (Adapted and cleaned up) ---
 const styles = StyleSheet.create({
   keyboardAvoidingContainer: {
     flex: 1,
@@ -350,6 +363,12 @@ const styles = StyleSheet.create({
     color: "#006400",
     fontSize: 15,
     fontWeight: "bold",
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
   },
 });
 

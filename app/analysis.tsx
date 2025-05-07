@@ -530,6 +530,7 @@ function AnalysisScreen() {
               <TouchableOpacity
                 style={styles.fab}
                 onPress={navigateToTransaction}
+                activeOpacity={0.8}
               >
                 <MaterialIcons name="add" size={28} color="white" />
               </TouchableOpacity>

@@ -392,8 +392,8 @@ const HistoryScreen = () => {
           {currentUser && !loading && (
             <TouchableOpacity
               style={styles.fab}
-              activeOpacity={0.8}
               onPress={navigateToTransaction}
+              activeOpacity={0.8}
             >
               <MaterialIcons name="add" size={28} color="white" />
             </TouchableOpacity>
@@ -417,17 +417,17 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 20,
     right: 20,
-    backgroundColor: "#B58900",
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    backgroundColor: "#0F730C",
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     justifyContent: "center",
     alignItems: "center",
     elevation: 6,
     shadowColor: "#000",
     shadowOpacity: 0.3,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    shadowRadius: 4,
     zIndex: 1,
   },
   fabSpace: {

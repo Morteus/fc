@@ -1,36 +1,35 @@
 // c:\Users\scubo\OneDrive\Documents\putangina\fc\app\Accounts.tsx
-import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Image,
-  ImageSourcePropType,
-  Alert,
-  ActivityIndicator,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context"; // Import SafeAreaView
-import Header from "../components/headertopnav";
-import BottomNavigationBar from "../components/botnavigationbar";
-import type { NavigationProp } from "@react-navigation/native";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import type { NavigationProp } from "@react-navigation/native";
 import { useNavigation } from "expo-router";
+import { onAuthStateChanged, User } from "firebase/auth";
 import {
-  getFirestore,
   collection,
-  onSnapshot,
   deleteDoc,
   doc,
-  query,
+  onSnapshot,
   orderBy,
+  query,
 } from "firebase/firestore";
-import { onAuthStateChanged, User } from "firebase/auth";
-import { app, db, auth } from "../app/firebase";
-import type { RootStackParamList } from "./types/navigation";
-import { useDateContext } from "./context/DateContext";
+import { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  ImageSourcePropType,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context"; // Import SafeAreaView
+import { auth, db } from "../app/firebase";
+import BottomNavigationBar from "../components/botnavigationbar";
+import Header from "../components/headertopnav";
 import { formatCurrency } from "../utils/formatting";
+import { useDateContext } from "./context/DateContext";
+import type { RootStackParamList } from "./types/navigation";
 
 const CardsSource = require("../assets/CAImages/Cards.png");
 const MoneySource = require("../assets/CAImages/Money.png");

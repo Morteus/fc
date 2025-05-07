@@ -427,16 +427,11 @@ const Header = () => {
     );
   };
 
-  // --- JSX ---
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#006400" />
-
-      {/* Header Content */}
       <View style={styles.headerWrapper}>
-        {/* Top Row */}
         <View style={styles.headerTop}>
-          {/* Menu Icon navigates to Profile Screen */}
           <TouchableOpacity
             style={styles.iconContainer}
             onPress={navigateToProfile}
@@ -460,10 +455,8 @@ const Header = () => {
           </View>
         </View>
 
-        {/* Middle Row */}
         <View style={styles.headerBottom}>
           <View style={styles.dateAndFilterContainer}>
-            {/* Month/Year Picker */}
             <View style={styles.dateContainer}>
               <TouchableOpacity
                 style={[
@@ -492,18 +485,15 @@ const Header = () => {
               </TouchableOpacity>
             </View>
 
-            {/* Filter Type Display */}
             <View style={styles.filterTypeDisplay}>
               <Text style={styles.filterTypeText}>{selectedFilter}</Text>
             </View>
           </View>
         </View>
 
-        {/* Bottom Row - Summary Cards */}
         <View style={styles.dataContainer}>{renderTotals()}</View>
       </View>
 
-      {/* Year Picker Modal */}
       {showYearPicker && (
         <Modal transparent animationType="fade" onRequestClose={hideDatePicker}>
           <TouchableWithoutFeedback onPress={hideDatePicker}>
@@ -550,7 +540,6 @@ const Header = () => {
         </Modal>
       )}
 
-      {/* Month Picker Modal */}
       {showMonthPicker && (
         <Modal transparent animationType="fade" onRequestClose={hideDatePicker}>
           <TouchableWithoutFeedback onPress={hideDatePicker}>
@@ -595,7 +584,6 @@ const Header = () => {
         </Modal>
       )}
 
-      {/* Filter Selection Modal */}
       {isFilterModalVisible && (
         <Modal
           transparent
@@ -769,7 +757,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   categoryAmount: {
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: "bold",
     textAlign: "center",
   },

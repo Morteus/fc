@@ -1,41 +1,39 @@
 // c:\Users\scubo\OneDrive\Documents\putangina\fc\app\Budgets.tsx
-import React, { useState, useEffect, useMemo } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  FlatList,
-  Alert,
-  ActivityIndicator,
-  Modal,
-  TextInput,
-  ScrollView,
-  // Platform removed
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context"; // Import SafeAreaView
-import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import { onAuthStateChanged, User } from "firebase/auth";
 import {
-  getFirestore,
-  collection,
-  query,
-  where,
-  onSnapshot,
   addDoc,
-  updateDoc,
+  collection,
   deleteDoc,
   doc,
+  onSnapshot,
   orderBy,
+  query,
   Timestamp,
+  updateDoc,
+  where,
 } from "firebase/firestore";
-import { onAuthStateChanged, User } from "firebase/auth";
+import { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context"; // Import SafeAreaView
 
-import HeaderTopNav from "../components/headertopnav";
+import { auth, db } from "../app/firebase";
 import BotNavigationBar from "../components/botnavigationbar";
-import { app, db, auth } from "../app/firebase";
+import HeaderTopNav from "../components/headertopnav";
+import { CURRENCY_SYMBOLS, formatCurrency } from "../utils/formatting"; // Import CURRENCY_SYMBOLS
 import { useDateContext } from "./context/DateContext";
-import { formatCurrency, CURRENCY_SYMBOLS } from "../utils/formatting"; // Import CURRENCY_SYMBOLS
 
 const PREDEFINED_EXPENSE_CATEGORIES: Array<{
   name: string;
@@ -813,6 +811,7 @@ const BudgetsScreen = () => {
               <TouchableOpacity
                 style={styles.fab}
                 onPress={navigateToTransaction}
+                activeOpacity={0.8}
               >
                 <MaterialIcons name="add" size={28} color="white" />
               </TouchableOpacity>
